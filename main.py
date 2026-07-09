@@ -1,69 +1,59 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-import requests
 import database_stadi
 from cachetools import TTLCache
 import math
 
-app = FastAPI(title="Schizzo Analytics Engine V3.3")
+app = FastAPI(title="Schizzo Analytics Engine V3.4")
 cache_partite = TTLCache(maxsize=100, ttl=60)
 
 class MatchRequest(BaseModel):
     home: str
     away: str
     match_id: str = None
+    arbitro_severity: float = 2.0  # Media cartellini arbitro (default 2.0)
 
-def poisson_prob(lmbda, k):
-    return (lmbda**k * math.exp(-lmbda)) / math.factorial(k)
+def calcola_impatto_stadio(stadio_info, meteo_avverso=False):
+    # Logica: lo stadio coperto protegge il gioco riducendo l'impatto di meteo avverso
+    if stadio_info.get("coperto", False):
+        return 0.9
+    elif meteo_avverso:
+        return 1.15
+    return 1.0
 
-def calcola_tutti_mercati(home_xg, away_xg):
-    # Matrice risultati esatti (0-0 fino a 3-3)
-    matrix = [[poisson_prob(home_xg, i) * poisson_prob(away_xg, j) for j in range(4)] for i in range(4)]
-    
-    # Calcolo mercati base
-    home_win = sum(matrix[i][j] for i in range(4) for j in range(4) if i > j)
-    draw = sum(matrix[i][i] for i in range(4))
-    away_win = sum(matrix[i][j] for i in range(4) for j in range(4) if i < j)
-    over_2_5 = sum(matrix[i][j] for i in range(4) for j in range(4) if i + j > 2.5)
-    gol = sum(matrix[i][j] for i in range(1, 4) for j in range(1, 4))
-    
-    # Nuovi mercati: Multigol 1-3
-    multigol_1_3 = sum(matrix[i][j] for i in range(4) for j in range(4) if 1 <= i + j <= 3)
-    
-    # Nuovi mercati: Top 3 Risultati Esatti
-    flat_matrix = [(f"{i}-{j}", matrix[i][j]) for i in range(4) for j in range(4)]
-    top_esatti = sorted(flat_matrix, key=lambda x: x[1], reverse=True)[:3]
-    
-    return {
-        "1x2": {"1": round(home_win*100, 1), "X": round(draw*100, 1), "2": round(away_win*100, 1)},
-        "under_over": {"over_2_5": round(over_2_5*100, 1), "under_2_5": round((1-over_2_5)*100, 1)},
-        "gol_nogol": {"gol": round(gol*100, 1), "nogol": round((1-gol)*100, 1)},
-        "multigol_1_3": round(multigol_1_3*100, 1),
-        "risultato_esatto_top3": {res: round(prob*100, 1) for res, prob in top_esatti}
-    }
+def stima_rischio_cartellini(home_info, away_info, arbitro_severity, moltiplicatore_meteo):
+    # Base: media ponderata delle due squadre + severità arbitro
+    base = (home_info["media_cartellini"] + away_info["media_cartellini"]) / 2
+    rischio = (base + arbitro_severity) / 2
+    # Applichiamo il fattore ambientale
+    return round(rischio * moltiplicatore_meteo, 2)
 
 @app.post("/predict")
 def predict(request: MatchRequest):
-    if not request.match_id:
-        raise HTTPException(status_code=400, detail="ID Match richiesto")
-    
-    if request.match_id in cache_partite:
-        return cache_partite[request.match_id]
-    
     home_key = request.home.lower().strip()
-    info = database_stadi.DB_STADI.get(home_key, {"indice_coach": 5.0})
+    away_key = request.away.lower().strip()
     
-    # Logica di calcolo xG (presto integreremo i dati estratti qui)
-    home_xg = info["indice_coach"] / 2
-    away_xg = 1.8 
+    if home_key not in database_stadi.DB_STADI or away_key not in database_stadi.DB_STADI:
+        raise HTTPException(status_code=404, detail="Squadra non trovata nel DB")
+        
+    home_info = database_stadi.DB_STADI[home_key]
     
-    mercati = calcola_tutti_mercati(home_xg, away_xg)
+    # Calcolo ambientale (simuliamo meteo_avverso=False per ora, puoi passarlo nel JSON)
+    moltiplicatore = calcola_impatto_stadio(home_info, meteo_avverso=False)
     
-    risposta = {
+    # Calcolo cartellini
+    rischio_cartellini = stima_rischio_cartellini(
+        home_info, 
+        database_stadi.DB_STADI[away_key], 
+        request.arbitro_severity, 
+        moltiplicatore
+    )
+    
+    return {
         "match": f"{request.home} vs {request.away}",
-        "projections": mercati,
-        "status": "Motore Poisson V3.3 Attivo"
+        "environment_factor": moltiplicatore,
+        "prediction": {
+            "risk_cards": rischio_cartellini,
+            "level": "Alta" if rischio_cartellini > 2.5 else "Normale"
+        }
     }
-    
-    cache_partite[request.match_id] = risposta
-    return risposta
