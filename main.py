@@ -8,7 +8,7 @@ app = FastAPI(title="Schizzo Analytics Cloud")
 class MatchRequest(BaseModel):
     home: str
     away: str
-    match_id: str = None  # Reso opzionale per permettere la ricerca automatica
+    match_id: str = None
 
 def estrai_dati_flashscore(match_id):
     headers = {
@@ -41,9 +41,22 @@ def cerca_match_id_automatico(home_name, away_name):
     except Exception:
         return None
 
+def ottieni_meteo(lat, lon):
+    api_key = "1276c6c958e9fa1f6d99da6fadb02421"
+    url = f"http://api.openweathermap.org/data/2.5/weather?lat={lat}&lon={lon}&appid={api_key}&units=metric"
+    try:
+        response = requests.get(url, timeout=5)
+        data = response.json()
+        return {
+            "temp": data["main"]["temp"],
+            "wind": data["wind"]["speed"],
+            "condition": data["weather"][0]["main"]
+        }
+    except:
+        return {"temp": "N/D", "wind": "N/D", "condition": "N/D"}
+
 @app.post("/predict")
 def predict(request: MatchRequest):
-    # Logica di ricerca automatica se match_id non viene fornito
     if not request.match_id:
         request.match_id = cerca_match_id_automatico(request.home, request.away)
         
@@ -52,20 +65,24 @@ def predict(request: MatchRequest):
     
     home_key = request.home.lower().strip()
     dati_live = estrai_dati_flashscore(request.match_id)
-    stadio_info = database_stadi.DB_STADI.get(home_key, {"stadio": "Sconosciuto", "citta": "N/D", "campo": "N/D", "indice_coach": 0})
+    stadio_info = database_stadi.DB_STADI.get(home_key, {
+        "stadio": "Sconosciuto", "citta": "N/D", "campo": "N/D", "indice_coach": 5.0, "lat": 0, "lon": 0
+    })
     
     if not dati_live:
-        raise HTTPException(status_code=404, detail="Dati live non disponibili per questo ID")
+        raise HTTPException(status_code=404, detail="Dati live non disponibili")
 
     data_match = dati_live.get('DATA', {})
+    meteo = ottieni_meteo(stadio_info["lat"], stadio_info["lon"])
     
     return {
         "stadium": stadio_info["stadio"],
         "city": stadio_info["citta"],
         "field_type": stadio_info["campo"],
         "coach_impact": stadio_info["indice_coach"],
+        "meteo": meteo,
         "referee": data_match.get('referee', 'N/D'),
         "prob_1": 45.0, 
         "data_live_raw": f"{data_match.get('home_name')} vs {data_match.get('away_name')}",
-        "status": "Dati Real-Time Integrati con Automazione"
+        "status": "Dati Real-Time + Meteo Attivi"
     }
