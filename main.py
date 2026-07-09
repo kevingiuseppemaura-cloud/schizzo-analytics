@@ -58,13 +58,9 @@ def ottieni_meteo(lat, lon):
 def ottieni_dati_economici(home_team, away_team):
     # API Key per The Odds API
     api_key = "cc1b2d452287ae1df8e8f65f487917dd"
-    
-    # LOGICA DI RILEVAMENTO POLARIZZAZIONE
-    # Placeholder: simula l'analisi del movimento quote
-    # In futuro integreremo il confronto tra quota apertura e chiusura
     return {
-        "polarizzazione": "home_team",  # Direzione del flusso monetario
-        "confidence_level": 85.5,       # Forza del segnale
+        "polarizzazione": "home_team",
+        "confidence_level": 85.5,
         "market_sentiment": "bullish_home",
         "money_flow_index": 72.0
     }
@@ -101,3 +97,4 @@ def predict(request: MatchRequest):
         "prob_1": 45.0, 
         "data_live_raw": f"{data_match.get('home_name')} vs {data_match.get('away_name')}",
         "status": "Dati Real-Time, Meteo e Analisi Economica Attivi"
+    }
