@@ -2,8 +2,12 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 import requests
 import database_stadi
+from cachetools import TTLCache
 
 app = FastAPI(title="Schizzo Analytics Cloud")
+
+# Cache: max 100 partite, validità 60 secondi
+cache_partite = TTLCache(maxsize=100, ttl=60)
 
 class MatchRequest(BaseModel):
     home: str
@@ -56,8 +60,6 @@ def ottieni_meteo(lat, lon):
         return {"temp": "N/D", "wind": "N/D", "condition": "N/D"}
 
 def ottieni_dati_economici(home_team, away_team):
-    # API Key per The Odds API
-    api_key = "cc1b2d452287ae1df8e8f65f487917dd"
     return {
         "polarizzazione": "home_team",
         "confidence_level": 85.5,
@@ -71,7 +73,11 @@ def predict(request: MatchRequest):
         request.match_id = cerca_match_id_automatico(request.home, request.away)
         
     if not request.match_id:
-        raise HTTPException(status_code=404, detail="Partita non trovata o ID mancante")
+        raise HTTPException(status_code=404, detail="Partita non trovata")
+    
+    # Controllo Cache: se il match è già stato processato nei 60s, restituisci quello
+    if request.match_id in cache_partite:
+        return cache_partite[request.match_id]
     
     home_key = request.home.lower().strip()
     dati_live = estrai_dati_flashscore(request.match_id)
@@ -86,7 +92,7 @@ def predict(request: MatchRequest):
     meteo = ottieni_meteo(stadio_info["lat"], stadio_info["lon"])
     analisi_eco = ottieni_dati_economici(request.home, request.away)
     
-    return {
+    risposta = {
         "stadium": stadio_info["stadio"],
         "city": stadio_info["citta"],
         "field_type": stadio_info["campo"],
@@ -96,5 +102,9 @@ def predict(request: MatchRequest):
         "referee": data_match.get('referee', 'N/D'),
         "prob_1": 45.0, 
         "data_live_raw": f"{data_match.get('home_name')} vs {data_match.get('away_name')}",
-        "status": "Dati Real-Time, Meteo e Analisi Economica Attivi"
+        "status": "Dati Real-Time (Cached: 60s)"
     }
+    
+    # Salva in cache prima di restituire
+    cache_partite[request.match_id] = risposta
+    return risposta
