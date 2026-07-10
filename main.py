@@ -54,16 +54,27 @@ def read_root():
 
 @app.post("/predict")
 def predict_match(request: MatchRequest):
+    # Normalizzazione iniziale del testo
     home = request.home.strip().title()
     away = request.away.strip().title()
     
+    # dizionario di traduzione per i soprannomi o abbreviazioni
+    DIZIONARIO_SQUADRE = {
+        "Juve": "Juventus",
+        "Inter Milan": "Inter",
+        "Int": "Inter",
+        "Verona": "Hellas Verona"
+    }
+    
+    # Se inserisci "Juve", il sistema lo converte automaticamente in "Juventus"
+    home = DIZIONARIO_SQUADRE.get(home, home)
+    away = DIZIONARIO_SQUADRE.get(away, away)
+    
     tutte_le_stats = carica_statistiche()
     
-    # Recuperiamo i dati grezzi dal JSON
     home_raw = tutte_le_stats.get(home, {"gialli": 0, "rossi": 0, "falli": 0})
     away_raw = tutte_le_stats.get(away, {"gialli": 0, "rossi": 0, "falli": 0})
     
-    # Modifichiamo la struttura inserendo una stringa unica per i cartellini
     stats_match = {
         "home": {
             "gialli": f"{home_raw.get('gialli', 0)} (Rossi: {home_raw.get('rossi', 0)})",
