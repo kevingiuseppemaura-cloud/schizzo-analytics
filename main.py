@@ -4,8 +4,9 @@ from pydantic import BaseModel
 import pandas as pd
 import json
 import os
+import math
 
-app = FastAPI(title="Schizzo Analytics Engine V4.0")
+app = FastAPI(title="Schizzo Analytics Engine V5.0 - Poisson Edition")
 
 app.add_middleware(
     CORSMiddleware,
@@ -20,6 +21,88 @@ class MatchRequest(BaseModel):
     away: str
     match_id: str
     arbitro_severity: float = 1.0
+
+def poisson_probability(k, lambd):
+    """Calcola la probabilità di segnare 'k' gol con una media attesa 'lambd'"""
+    return (lambd**k * math.exp(-lambd)) / math.factorial(k)
+
+def calcola_pronostico_poisson(home: str, away: str):
+    """Genera le percentuali 1X2, Under/Over, Gol/NoGol e Risultati esatti"""
+    try:
+        if not os.path.exists('serie_a_dati.csv'):
+            return None
+            
+        df = pd.read_csv('serie_a_dati.csv')
+        
+        # 1. Medie globali del campionato
+        media_gol_casa = df['FTHG'].mean()
+        media_gol_trasferta = df['FTAG'].mean()
+        
+        # 2. Statistiche Casa
+        partite_casa = df[df['HomeTeam'] == home]
+        if partite_casa.empty:
+            return None
+        gol_fatti_casa = partite_casa['FTHG'].mean()
+        gol_subiti_casa = partite_casa['FTAG'].mean()
+        
+        # 3. Statistiche Trasferta
+        partite_trasferta = df[df['AwayTeam'] == away]
+        if partite_trasferta.empty:
+            return None
+        gol_fatti_trasferta = partite_trasferta['FTAG'].mean()
+        gol_subiti_trasferta = partite_trasferta['FTHG'].mean()
+        
+        # 4. Calcolo Forze (Attacco/Difesa)
+        forza_attacco_home = gol_fatti_casa / media_gol_casa
+        forza_difesa_home = gol_subiti_casa / media_gol_trasferta
+        
+        forza_attacco_away = gol_fatti_trasferta / media_gol_trasferta
+        forza_difesa_away = gol_subiti_trasferta / media_gol_casa
+        
+        # 5. Expected Goals (xG)
+        xg_home = forza_attacco_home * forza_difesa_away * media_gol_casa
+        xg_away = forza_attacco_away * forza_difesa_home * media_gol_trasferta
+        
+        # 6. Generazione matrice probabilità (fino a 5 gol a testa)
+        prob_1 = prob_x = prob_2 = 0
+        prob_over = prob_under = 0
+        prob_gol = prob_nogol = 0
+        risultati_esatti = {}
+
+        for i in range(6): # Gol previsti Casa
+            for j in range(6): # Gol previsti Trasferta
+                prob = poisson_probability(i, xg_home) * poisson_probability(j, xg_away)
+                
+                # Calcolo 1X2
+                if i > j: prob_1 += prob
+                elif i == j: prob_x += prob
+                else: prob_2 += prob
+                
+                # Calcolo Under/Over 2.5
+                if (i + j) > 2.5: prob_over += prob
+                else: prob_under += prob
+                
+                # Calcolo Gol/No Gol
+                if i > 0 and j > 0: prob_gol += prob
+                else: prob_nogol += prob
+                
+                # Mappatura risultato esatto
+                risultati_esatti[f"{i}-{j}"] = prob
+                
+        # Estraiamo i 3 risultati più probabili
+        top_3_risultati = sorted(risultati_esatti.items(), key=lambda x: x[1], reverse=True)[:3]
+        top_3_formattati = {ris: f"{round(p * 100, 1)}%" for ris, p in top_3_risultati}
+
+        return {
+            "mercato_1X2": {"1": f"{round(prob_1*100, 1)}%", "X": f"{round(prob_x*100, 1)}%", "2": f"{round(prob_2*100, 1)}%"},
+            "under_over": {"Under 2.5": f"{round(prob_under*100, 1)}%", "Over 2.5": f"{round(prob_over*100, 1)}%"},
+            "gol_nogol": {"Gol": f"{round(prob_gol*100, 1)}%", "No Gol": f"{round(prob_nogol*100, 1)}%"},
+            "risultati_esatti": top_3_formattati,
+            "xG": {"home": round(xg_home, 2), "away": round(xg_away, 2)}
+        }
+    except Exception as e:
+        print(f"Errore Poisson: {e}")
+        return None
 
 def calcola_whale_alert(home: str, away: str):
     try:
@@ -38,7 +121,7 @@ def calcola_whale_alert(home: str, away: str):
             elif (max_a - avg_a) >= soglia_allarme:
                 return {"polarizzazione": away, "intensita": "Alta (Flusso su Ospite)"}
     except Exception as e:
-        print(f"Errore analisi balene: {e}")
+        pass
     return None
 
 def carica_statistiche():
@@ -50,15 +133,13 @@ def carica_statistiche():
 
 @app.get("/")
 def read_root():
-    return {"status": "Schizzo Analytics Engine V4.0 è online."}
+    return {"status": "Schizzo Analytics Engine V5.0 è online."}
 
 @app.post("/predict")
 def predict_match(request: MatchRequest):
-    # Normalizzazione iniziale del testo
     home = request.home.strip().title()
     away = request.away.strip().title()
     
-    # dizionario di traduzione per i soprannomi o abbreviazioni
     DIZIONARIO_SQUADRE = {
         "Juve": "Juventus",
         "Inter Milan": "Inter",
@@ -66,12 +147,10 @@ def predict_match(request: MatchRequest):
         "Verona": "Hellas Verona"
     }
     
-    # Se inserisci "Juve", il sistema lo converte automaticamente in "Juventus"
     home = DIZIONARIO_SQUADRE.get(home, home)
     away = DIZIONARIO_SQUADRE.get(away, away)
     
     tutte_le_stats = carica_statistiche()
-    
     home_raw = tutte_le_stats.get(home, {"gialli": 0, "rossi": 0, "falli": 0})
     away_raw = tutte_le_stats.get(away, {"gialli": 0, "rossi": 0, "falli": 0})
     
@@ -92,12 +171,14 @@ def predict_match(request: MatchRequest):
          alerts["flussi_monetari"] = allarme_balene
          
     rischio_base = 1.7 * request.arbitro_severity
+    
+    # NOVITÀ: Eseguiamo l'algoritmo predittivo
+    modello_predittivo = calcola_pronostico_poisson(home, away)
          
     return {
         "match": f"{home} vs {away}",
         "rischio_cartellini": round(rischio_base, 2),
-        "probabilita_mercato_implicita": 0.526,
-        "analisi_valore": "Allineato",
+        "modello_poisson": modello_predittivo, # Rimpiazzato il dato provvisorio con le probabilità reali
         "alert": alerts,
         "stats": stats_match,
         "status": "Analisi completata con successo"
