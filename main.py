@@ -6,7 +6,7 @@ import json
 import os
 import math
 
-app = FastAPI(title="Schizzo Analytics Engine V5.2 - Poisson Full Text Edition")
+app = FastAPI(title="Schizzo Analytics Engine V5.3 - Advanced Engine")
 
 app.add_middleware(
     CORSMiddleware,
@@ -58,44 +58,78 @@ def calcola_pronostico_poisson(home: str, away: str):
         xg_home = forza_attacco_home * forza_difesa_away * media_gol_casa
         xg_away = forza_attacco_away * forza_difesa_home * media_gol_trasferta
         
+        # Inizializzazione Mercati complessi
         prob_1 = prob_x = prob_2 = 0
-        prob_over = prob_under = 0
         prob_gol = prob_nogol = 0
         risultati_esatti = {}
+        
+        soglie_uo = [0.5, 1.5, 2.5, 3.5, 4.5]
+        conteggio_uo = {soglia: {"under": 0.0, "over": 0.0} for soglia in soglie_uo}
+        
+        intervalli_multigol = {
+            "1-2": (1, 2), "1-3": (1, 3), "1-4": (1, 4),
+            "2-3": (2, 3), "2-4": (2, 4), "2-5": (2, 5), "3-4": (3, 4)
+        }
+        conteggio_multigol = {chiave: 0.0 for chiavece in intervalli_multigol.keys()}
 
+        # Matrice di Poisson (fino a 5 gol per squadra)
         for i in range(6): 
             for j in range(6): 
                 prob = poisson_probability(i, xg_home) * poisson_probability(j, xg_away)
+                totale_gol = i + j
                 
+                # 1X2
                 if i > j: prob_1 += prob
                 elif i == j: prob_x += prob
                 else: prob_2 += prob
                 
-                if (i + j) > 2.5: prob_over += prob
-                else: prob_under += prob
-                
+                # Gol / No Gol
                 if i > 0 and j > 0: prob_gol += prob
                 else: prob_nogol += prob
+                
+                # Calcolo dinamico di tutti gli Under/Over
+                for soglia in soglie_uo:
+                    if totale_gol > soglia:
+                        conteggio_uo[soglia]["over"] += prob
+                    else:
+                        conteggio_uo[soglia]["under"] += prob
+                
+                # Calcolo dinamico di tutti i Multigol
+                for chiave, (min_g, max_g) in intervalli_multigol.items():
+                    if min_g <= totale_gol <= max_g:
+                        conteggio_multigol[chiave] += prob
                 
                 risultati_esatti[f"{i}-{j}"] = prob
                 
         top_3_risultati = sorted(risultati_esatti.items(), key=lambda x: x[1], reverse=True)[:3]
-        top_3_formattati = {ris: f"{round(p * 100, 1)}%" for ris, p in top_3_risultati}
+
+        # Formattazione dizionari in percentuali pronte per Flutter
+        payload_uo = {}
+        for s in soglie_uo:
+            payload_uo[f"U/O {s}"] = {
+                "Under": f"{round(conteggio_uo[s]['under'] * 100, 1)}%",
+                "Over": f"{round(conteggio_uo[s]['over'] * 100, 1)}%"
+            }
+            
+        payload_mg = {f"Multigol {k}": f"{round(v * 100, 1)}%" for k, v in conteggio_multigol.items()}
 
         return {
-            "prob_1": prob_1,
-            "prob_x": prob_x,
-            "prob_2": prob_2,
-            "prob_under": prob_under,
-            "prob_over": prob_over,
-            "prob_gol": prob_gol,
-            "prob_nogol": prob_nogol,
-            "risultati_esatti": top_3_formattati,
-            "xg_home": round(xg_home, 2),
-            "xg_away": round(xg_away, 2)
+            "mercato_1X2": {
+                "1": f"{round(prob_1*100, 1)}%", 
+                "X": f"{round(prob_x*100, 1)}%", 
+                "2": f"{round(prob_2*100, 1)}%"
+            },
+            "gol_nogol": {
+                "Gol": f"{round(prob_gol*100, 1)}%", 
+                "No Gol": f"{round(prob_nogol*100, 1)}%"
+            },
+            "under_over_completo": payload_uo,
+            "multigol_completo": payload_mg,
+            "risultati_esatti": {ris: f"{round(p * 100, 1)}%" for ris, p in top_3_risultati},
+            "xG": {"home": round(xg_home, 2), "away": round(xg_away, 2)}
         }
     except Exception as e:
-        print(f"Errore Poisson: {e}")
+        print(f"Errore Avanzato Poisson: {e}")
         return None
 
 def calcola_whale_alert(home: str, away: str):
@@ -108,12 +142,10 @@ def calcola_whale_alert(home: str, away: str):
             max_h = match_data['MaxH'].values[0]
             avg_h = match_data['AvgH'].values[0]
             max_a = match_data['MaxA'].values[0]
-            avg_a = match_data['AwayTeam'].values[0] # Fallback o gestione interna
+            avg_a = match_data['AwayTeam'].values[0]
             soglia_allarme = 0.15
             if (max_h - avg_h) >= soglia_allarme:
                 return {"polarizzazione": home, "intensita": "Alta (Flusso su Casa)"}
-            elif (max_a - max_h) >= soglia_allarme: # Modificato leggermente per sicurezza sintassi
-                return {"polarizzazione": away, "intensita": "Alta (Flusso su Ospite)"}
     except Exception:
         pass
     return None
@@ -127,20 +159,14 @@ def carica_statistiche():
 
 @app.get("/")
 def read_root():
-    return {"status": "Schizzo Analytics Engine V5.2 è online."}
+    return {"status": "Schizzo Analytics Engine V5.3 è online."}
 
 @app.post("/predict")
 def predict_match(request: MatchRequest):
     home = request.home.strip().title()
     away = request.away.strip().title()
     
-    DIZIONARIO_SQUADRE = {
-        "Juve": "Juventus",
-        "Inter Milan": "Inter",
-        "Int": "Inter",
-        "Verona": "Hellas Verona"
-    }
-    
+    DIZIONARIO_SQUADRE = {"Juve": "Juventus", "Inter Milan": "Inter", "Int": "Inter", "Verona": "Hellas Verona"}
     home = DIZIONARIO_SQUADRE.get(home, home)
     away = DIZIONARIO_SQUADRE.get(away, away)
     
@@ -149,67 +175,23 @@ def predict_match(request: MatchRequest):
     away_raw = tutte_le_stats.get(away, {"gialli": 0, "rossi": 0, "falli": 0})
     
     stats_match = {
-        "home": {
-            "gialli": f"{home_raw.get('gialli', 0)} (Rossi: {home_raw.get('rossi', 0)})",
-            "falli": home_raw.get("falli", 0)
-        },
-        "away": {
-            "gialli": f"{away_raw.get('gialli', 0)} (Rossi: {away_raw.get('rossi', 0)})",
-            "falli": away_raw.get("falli", 0)
-        }
+        "home": {"gialli": f"{home_raw.get('gialli', 0)} (Rossi: {home_raw.get('rossi', 0)})", "falli": home_raw.get("falli", 0)},
+        "away": {"gialli": f"{away_raw.get('gialli', 0)} (Rossi: {away_raw.get('rossi', 0)})", "falli": away_raw.get("falli", 0)}
     }
     
     allarme_balene = calcola_whale_alert(home, away)
     alerts = {}
-    if allarme_balene:
-         alerts["flussi_monetari"] = allarme_balene
+    if allarme_balene: alerts["flussi_monetari"] = allarme_balene
          
     rischio_base = 1.7 * request.arbitro_severity
     modello_predittivo = calcola_pronostico_poisson(home, away)
-    
-    prob_mercato_compatibile = 0.50
-    analisi_valore_compatibile = "Dati insufficienti"
-    poisson_payload = None
-    
-    if modello_predittivo:
-        # Mostriamo la probabilità esatta del segno 1 nel box dedicato
-        prob_mercato_compatibile = round(modello_predittivo["prob_1"], 3)
-        
-        # Estraiamo e formattiamo ogni singola metrica per inserirla nel campo di testo unico
-        p_1 = f"{round(modello_predittivo['prob_1']*100, 1)}%"
-        p_x = f"{round(modello_predittivo['prob_x']*100, 1)}%"
-        p_2 = f"{round(modello_predittivo['prob_2']*100, 1)}%"
-        
-        u_25 = f"{round(modello_predittivo['prob_under']*100, 1)}%"
-        o_25 = f"{round(modello_predittivo['prob_over']*100, 1)}%"
-        
-        gol = f"{round(modello_predittivo['prob_gol']*100, 1)}%"
-        nogol = f"{round(modello_predittivo['prob_nogol']*100, 1)}%"
-        
-        top_res_str = ", ".join([f"{k} ({v})" for k, v in modello_predittivo["risultati_esatti"].items()])
-        
-        # COSTRUZIONE DEL SUPER-REPORT (Leggibile in un unico widget di testo su Flutter)
-        analisi_valore_compatibile = (
-            f"1X2: {p_1} / {p_x} / {p_2} | "
-            f"U/O 2.5: U {u_25} - O {o_25} | "
-            f"G/NG: Gol {gol} - NG {nogol} | "
-            f"Top Score: {top_res_str}"
-        )
-        
-        poisson_payload = {
-            "mercato_1X2": {"1": p_1, "X": p_x, "2": p_2},
-            "under_over": {"Under 2.5": u_25, "Over 2.5": o_25},
-            "gol_nogol": {"Gol": gol, "No Gol": nogol},
-            "risultati_esatti": modello_predittivo["risultati_esatti"],
-            "xG": {"home": modello_predittivo["xg_home"], "away": modello_predittivo["xg_away"]}
-        }
          
     return {
         "match": f"{home} vs {away}",
         "rischio_cartellini": round(rischio_base, 2),
-        "probabilita_mercato_implicita": prob_mercato_compatibile, 
-        "analisi_valore": analisi_valore_compatibile, # Qui ora passa TUTTO
-        "modello_poisson": poisson_payload, 
+        "probabilita_mercato_implicita": round(modello_predittivo["under_over_completo"]["U/O 2.5"]["Over"], 4) if modello_predittivo else 0.50, 
+        "analisi_valore": "Mappatura Completa Attiva", 
+        "modello_poisson": modello_predittivo, # La miniera d'oro strutturata per Flutter
         "alert": alerts,
         "stats": stats_match,
         "status": "Analisi completata con successo"
