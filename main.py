@@ -71,8 +71,9 @@ def read_root():
 
 @app.post("/predict")
 def predict_match(request: MatchRequest):
-    home = request.home
-    away = request.away
+    # .strip().title() trasforma "milan " o "milan" in "Milan" automaticamente
+    home = request.home.strip().title()
+    away = request.away.strip().title()
     
     # 1. Carica le statistiche dal JSON
     tutte_le_stats = carica_statistiche()
@@ -96,7 +97,7 @@ def predict_match(request: MatchRequest):
     return {
         "match": f"{home} vs {away}",
         "rischio_cartellini": round(rischio_base, 2),
-        "probabilita_mercato_implicita": 0.526, # Valore provvisorio, lo sostituiremo col modello Poisson
+        "probabilita_mercato_implicita": 0.526, 
         "analisi_valore": "Allineato",
         "alert": alerts,
         "stats": stats_match,
