@@ -28,24 +28,35 @@ def poisson_probability(k, lambd):
     return (lambd**k * math.exp(-lambd)) / math.factorial(k)
 
 def calcola_pronostico_poisson(home: str, away: str):
+    # Restituisce un dizionario vuoto se qualcosa va storto, evitando crash nell'App
+    default_response = {}
+    
     try:
         if not os.path.exists('serie_a_dati.csv'):
-            return None
+            print("Errore: CSV non trovato")
+            return default_response
             
         df = pd.read_csv('serie_a_dati.csv')
+        
+        # Pulizia nomi colonne se necessario
+        df.columns = df.columns.str.strip()
         
         media_gol_casa = df['FTHG'].mean()
         media_gol_trasferta = df['FTAG'].mean()
         
         partite_casa = df[df['HomeTeam'] == home]
         if partite_casa.empty:
-            return None
+            print(f"Errore: Squadra casa {home} non trovata")
+            return default_response
+        
         gol_fatti_casa = partite_casa['FTHG'].mean()
         gol_subiti_casa = partite_casa['FTAG'].mean()
         
         partite_trasferta = df[df['AwayTeam'] == away]
         if partite_trasferta.empty:
-            return None
+            print(f"Errore: Squadra trasferta {away} non trovata")
+            return default_response
+            
         gol_fatti_trasferta = partite_trasferta['FTAG'].mean()
         gol_subiti_trasferta = partite_trasferta['FTHG'].mean()
         
@@ -58,7 +69,6 @@ def calcola_pronostico_poisson(home: str, away: str):
         xg_home = forza_attacco_home * forza_difesa_away * media_gol_casa
         xg_away = forza_attacco_away * forza_difesa_home * media_gol_trasferta
         
-        # Inizializzazione Mercati complessi
         prob_1 = prob_x = prob_2 = 0
         prob_gol = prob_nogol = 0
         risultati_esatti = {}
@@ -70,31 +80,26 @@ def calcola_pronostico_poisson(home: str, away: str):
             "1-2": (1, 2), "1-3": (1, 3), "1-4": (1, 4),
             "2-3": (2, 3), "2-4": (2, 4), "2-5": (2, 5), "3-4": (3, 4)
         }
-        conteggio_multigol = {chiave: 0.0 for chiavece in intervalli_multigol.keys()}
+        conteggio_multigol = {chiave: 0.0 for chiave in intervalli_multigol.keys()}
 
-        # Matrice di Poisson (fino a 5 gol per squadra)
         for i in range(6): 
             for j in range(6): 
                 prob = poisson_probability(i, xg_home) * poisson_probability(j, xg_away)
                 totale_gol = i + j
                 
-                # 1X2
                 if i > j: prob_1 += prob
                 elif i == j: prob_x += prob
                 else: prob_2 += prob
                 
-                # Gol / No Gol
                 if i > 0 and j > 0: prob_gol += prob
                 else: prob_nogol += prob
                 
-                # Calcolo dinamico di tutti gli Under/Over
                 for soglia in soglie_uo:
                     if totale_gol > soglia:
                         conteggio_uo[soglia]["over"] += prob
                     else:
                         conteggio_uo[soglia]["under"] += prob
                 
-                # Calcolo dinamico di tutti i Multigol
                 for chiave, (min_g, max_g) in intervalli_multigol.items():
                     if min_g <= totale_gol <= max_g:
                         conteggio_multigol[chiave] += prob
@@ -103,7 +108,6 @@ def calcola_pronostico_poisson(home: str, away: str):
                 
         top_3_risultati = sorted(risultati_esatti.items(), key=lambda x: x[1], reverse=True)[:3]
 
-        # Formattazione dizionari in percentuali pronte per Flutter
         payload_uo = {}
         for s in soglie_uo:
             payload_uo[f"U/O {s}"] = {
@@ -129,8 +133,8 @@ def calcola_pronostico_poisson(home: str, away: str):
             "xG": {"home": round(xg_home, 2), "away": round(xg_away, 2)}
         }
     except Exception as e:
-        print(f"Errore Avanzato Poisson: {e}")
-        return None
+        print(f"Errore Poisson: {e}")
+        return default_response
 
 def calcola_whale_alert(home: str, away: str):
     try:
@@ -141,8 +145,6 @@ def calcola_whale_alert(home: str, away: str):
         if not match_data.empty:
             max_h = match_data['MaxH'].values[0]
             avg_h = match_data['AvgH'].values[0]
-            max_a = match_data['MaxA'].values[0]
-            avg_a = match_data['AwayTeam'].values[0]
             soglia_allarme = 0.15
             if (max_h - avg_h) >= soglia_allarme:
                 return {"polarizzazione": home, "intensita": "Alta (Flusso su Casa)"}
@@ -189,10 +191,8 @@ def predict_match(request: MatchRequest):
     return {
         "match": f"{home} vs {away}",
         "rischio_cartellini": round(rischio_base, 2),
-        "probabilita_mercato_implicita": round(modello_predittivo["under_over_completo"]["U/O 2.5"]["Over"], 4) if modello_predittivo else 0.50, 
-        "analisi_valore": "Mappatura Completa Attiva", 
-        "modello_poisson": modello_predittivo, # La miniera d'oro strutturata per Flutter
+        "modello_poisson": modello_predittivo,
         "alert": alerts,
         "stats": stats_match,
-        "status": "Analisi completata con successo"
+        "status": "Analisi completata"
     }
