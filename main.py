@@ -4,8 +4,9 @@ from pydantic import BaseModel
 import json
 import os
 import uvicorn
+import esperti
 
-app = FastAPI(title="Schizzo Analytics Engine - V5.7 Extended")
+app = FastAPI(title="Schizzo Analytics Engine - V5.9 Formula 76")
 
 app.add_middleware(
     CORSMiddleware,
@@ -29,14 +30,7 @@ def carica_statistiche():
             except: return {}
     return {}
 
-def calcola_media_partita(stats):
-    # FORMULA 38: (Gialli + (Rossi * 3)) / 38
-    g = float(stats.get('gialli', 0))
-    r = float(stats.get('rossi', 0))
-    return (g + (r * 3)) / 38
-
 def get_poisson_data(home_stats, away_stats):
-    # Dati estesi come richiesto
     return {
         "mercato_1X2": {"1": "45%", "X": "25%", "2": "30%"},
         "gol_nogol": {"Gol": "55%", "No Gol": "45%"},
@@ -67,37 +61,47 @@ async def predict_match(request: MatchRequest):
     home = request.home.strip().title()
     away = request.away.strip().title()
     
-    mappa = {"Juve": "Juventus", "Inter Milan": "Inter", "Int": "Inter", "Verona": "Verona"}
+    mappa = {"Juve": "Juventus", "Inter Milan": "Inter", "Int": "Inter", "Verona": "Hellas Verona"}
     home = mappa.get(home, home)
     away = mappa.get(away, away)
     
     tutte_le_stats = carica_statistiche()
     default = {"gialli": 60, "rossi": 3, "falli": 450}
-    home_stats = tutte_le_stats.get(home, default)
-    away_stats = tutte_le_stats.get(away, default)
     
-    # 1. Rischio Cartellini (Formula 38)
-    media_home = calcola_media_partita(home_stats)
-    media_away = calcola_media_partita(away_stats)
-    rischio_finale = ((media_home + media_away) / 2) * request.arbitro_severity
+    h_stats = tutte_le_stats.get(home, default)
+    a_stats = tutte_le_stats.get(away, default)
     
-    # 2. Dati Poisson
-    dati_poisson = get_poisson_data(home_stats, away_stats)
+    # NUOVA FORMULA: (Totale Gialli + Rossi / 76) * Severità
+    totale_gialli = float(h_stats.get('gialli', 0)) + float(a_stats.get('gialli', 0))
+    totale_rossi = float(h_stats.get('rossi', 0)) + float(a_stats.get('rossi', 0))
     
-    # 3. Panel Esperti
-    panel_esperti = {
-        "Analisi Dati": "Stabile",
-        "Trend Arbitro": "Favorevole" if request.arbitro_severity > 1.0 else "Normale"
-    }
+    rischio_finale = ((totale_gialli + totale_rossi) / 76) * request.arbitro_severity
     
-    print(f"DEBUG -> Risultato Finale: {rischio_finale:.2f}")
+    # Dati Poisson
+    dati_poisson = get_poisson_data(h_stats, a_stats)
+    
+    # Panel Esperti
+    try:
+        panel_esperti = await esperti.get_tutti_esperti(request.match_id)
+    except Exception:
+        panel_esperti = {"Status": "Errore caricamento esperti"}
+    
+    print(f"DEBUG -> Formula: ({totale_gialli}G + {totale_rossi}R) / 76 * {request.arbitro_severity} = {rischio_finale:.2f}")
 
     return {
         "match": f"{home} vs {away}",
         "rischio_cartellini": round(rischio_finale, 2),
         "stats": {
-            "home": {"gialli": home_stats.get('gialli'), "rossi": home_stats.get('rossi'), "falli": home_stats.get('falli')},
-            "away": {"gialli": away_stats.get('gialli'), "rossi": away_stats.get('rossi'), "falli": away_stats.get('falli')}
+            "home": {
+                "gialli": h_stats.get('gialli'), 
+                "rossi": h_stats.get('rossi'), 
+                "falli": h_stats.get('falli')
+            },
+            "away": {
+                "gialli": a_stats.get('gialli'), 
+                "rossi": a_stats.get('rossi'), 
+                "falli": a_stats.get('falli')
+            }
         },
         "modello_poisson": dati_poisson,
         "panel_esperti": panel_esperti
