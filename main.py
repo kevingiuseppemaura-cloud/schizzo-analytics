@@ -6,7 +6,7 @@ import json
 import os
 import math
 
-app = FastAPI(title="Schizzo Analytics Engine V5.0 - Poisson Edition")
+app = FastAPI(title="Schizzo Analytics Engine V5.1 - Poisson Compatibility Edition")
 
 app.add_middleware(
     CORSMiddleware,
@@ -24,10 +24,12 @@ class MatchRequest(BaseModel):
 
 def poisson_probability(k, lambd):
     """Calcola la probabilità di segnare 'k' gol con una media attesa 'lambd'"""
+    if lambd <= 0:
+        return 0.0
     return (lambd**k * math.exp(-lambd)) / math.factorial(k)
 
 def calcola_pronostico_poisson(home: str, away: str):
-    """Genera le percentuali 1X2, Under/Over, Gol/NoGol e Risultati esatti"""
+    """Genera le percentuali grezze e formattate tramite la distribuzione di Poisson"""
     try:
         if not os.path.exists('serie_a_dati.csv'):
             return None
@@ -53,11 +55,11 @@ def calcola_pronostico_poisson(home: str, away: str):
         gol_subiti_trasferta = partite_trasferta['FTHG'].mean()
         
         # 4. Calcolo Forze (Attacco/Difesa)
-        forza_attacco_home = gol_fatti_casa / media_gol_casa
-        forza_difesa_home = gol_subiti_casa / media_gol_trasferta
+        forza_attacco_home = gol_fatti_casa / media_gol_casa if media_gol_casa > 0 else 1
+        forza_difesa_home = gol_subiti_casa / media_gol_trasferta if media_gol_trasferta > 0 else 1
         
-        forza_attacco_away = gol_fatti_trasferta / media_gol_trasferta
-        forza_difesa_away = gol_subiti_trasferta / media_gol_casa
+        forza_attacco_away = gol_fatti_trasferta / media_gol_trasferta if media_gol_trasferta > 0 else 1
+        forza_difesa_away = gol_subiti_trasferta / media_gol_casa if media_gol_casa > 0 else 1
         
         # 5. Expected Goals (xG)
         xg_home = forza_attacco_home * forza_difesa_away * media_gol_casa
@@ -94,11 +96,16 @@ def calcola_pronostico_poisson(home: str, away: str):
         top_3_formattati = {ris: f"{round(p * 100, 1)}%" for ris, p in top_3_risultati}
 
         return {
-            "mercato_1X2": {"1": f"{round(prob_1*100, 1)}%", "X": f"{round(prob_x*100, 1)}%", "2": f"{round(prob_2*100, 1)}%"},
-            "under_over": {"Under 2.5": f"{round(prob_under*100, 1)}%", "Over 2.5": f"{round(prob_over*100, 1)}%"},
-            "gol_nogol": {"Gol": f"{round(prob_gol*100, 1)}%", "No Gol": f"{round(prob_nogol*100, 1)}%"},
+            "prob_1": prob_1,
+            "prob_x": prob_x,
+            "prob_2": prob_2,
+            "prob_under": prob_under,
+            "prob_over": prob_over,
+            "prob_gol": prob_gol,
+            "prob_nogol": prob_nogol,
             "risultati_esatti": top_3_formattati,
-            "xG": {"home": round(xg_home, 2), "away": round(xg_away, 2)}
+            "xg_home": round(xg_home, 2),
+            "xg_away": round(xg_away, 2)
         }
     except Exception as e:
         print(f"Errore Poisson: {e}")
@@ -120,7 +127,7 @@ def calcola_whale_alert(home: str, away: str):
                 return {"polarizzazione": home, "intensita": "Alta (Flusso su Casa)"}
             elif (max_a - avg_a) >= soglia_allarme:
                 return {"polarizzazione": away, "intensita": "Alta (Flusso su Ospite)"}
-    except Exception as e:
+    except Exception:
         pass
     return None
 
@@ -133,7 +140,7 @@ def carica_statistiche():
 
 @app.get("/")
 def read_root():
-    return {"status": "Schizzo Analytics Engine V5.0 è online."}
+    return {"status": "Schizzo Analytics Engine V5.1 è online."}
 
 @app.post("/predict")
 def predict_match(request: MatchRequest):
@@ -172,13 +179,47 @@ def predict_match(request: MatchRequest):
          
     rischio_base = 1.7 * request.arbitro_severity
     
-    # NOVITÀ: Eseguiamo l'algoritmo predittivo
+    # Eseguiamo il modello matematico
     modello_predittivo = calcola_pronostico_poisson(home, away)
+    
+    # Valori di compatibilità per non rompere l'interfaccia attuale di Flutter
+    prob_mercato_compatibile = 0.50
+    analisi_valore_compatibile = "Dati insufficienti"
+    poisson_payload = None
+    
+    if modello_predittivo:
+        # Passiamo la probabilità REALE del segno 1 (es. 0.564 invece del vecchio 0.526 fisso)
+        prob_mercato_compatibile = round(modello_predittivo["prob_1"], 3)
+        
+        # Invece di scrivere "Allineato", forziamo i 3 risultati esatti più probabili nel testo!
+        top_res_str = ", ".join([f"{k} ({v})" for k, v in modello_predittivo["risultati_esatti"].items()])
+        analisi_valore_compatibile = f"Risultati: {top_res_str}"
+        
+        # Struttura dati completa pronta per quando aggiornerai i widget su Flutter
+        poisson_payload = {
+            "mercato_1X2": {
+                "1": f"{round(modello_predittivo['prob_1']*100, 1)}%",
+                "X": f"{round(modello_predittivo['prob_x']*100, 1)}%",
+                "2": f"{round(modello_predittivo['prob_2']*100, 1)}%"
+            },
+            "under_over": {
+                "Under 2.5": f"{round(modello_predittivo['prob_under']*100, 1)}%",
+                "Over 2.5": f"{round(modello_predittivo['prob_over']*100, 1)}%"
+            },
+            "gol_nogol": {
+                "Gol": f"{round(modello_predittivo['prob_gol']*100, 1)}%",
+                "No Gol": f"{round(modello_predittivo['prob_nogol']*100, 1)}%"
+            },
+            "risultati_esatti": modello_predittivo["risultati_esatti"],
+            "xG": {"home": modello_predittivo["xg_home"], "away": modello_predittivo["xg_away"]}
+        }
          
     return {
         "match": f"{home} vs {away}",
         "rischio_cartellini": round(rischio_base, 2),
-        "modello_poisson": modello_predittivo, # Rimpiazzato il dato provvisorio con le probabilità reali
+        "probabilita_mercato_implicita": prob_mercato_compatibile, 
+        "analisi_valore": analisi_valore_compatibile,
+        "modello_poisson": poisson_payload, 
         "alert": alerts,
         "stats": stats_match,
         "status": "Analisi completata con successo"
