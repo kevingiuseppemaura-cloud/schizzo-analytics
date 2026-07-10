@@ -1,10 +1,11 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import pandas as pd
 import json
 import os
 import math
+import esperti # Modulo integrato
 
 app = FastAPI(title="Schizzo Analytics Engine V5.3 - Advanced Engine")
 
@@ -28,17 +29,12 @@ def poisson_probability(k, lambd):
     return (lambd**k * math.exp(-lambd)) / math.factorial(k)
 
 def calcola_pronostico_poisson(home: str, away: str):
-    # Restituisce un dizionario vuoto se qualcosa va storto, evitando crash nell'App
     default_response = {}
-    
     try:
         if not os.path.exists('serie_a_dati.csv'):
-            print("Errore: CSV non trovato")
             return default_response
             
         df = pd.read_csv('serie_a_dati.csv')
-        
-        # Pulizia nomi colonne se necessario
         df.columns = df.columns.str.strip()
         
         media_gol_casa = df['FTHG'].mean()
@@ -46,7 +42,6 @@ def calcola_pronostico_poisson(home: str, away: str):
         
         partite_casa = df[df['HomeTeam'] == home]
         if partite_casa.empty:
-            print(f"Errore: Squadra casa {home} non trovata")
             return default_response
         
         gol_fatti_casa = partite_casa['FTHG'].mean()
@@ -54,7 +49,6 @@ def calcola_pronostico_poisson(home: str, away: str):
         
         partite_trasferta = df[df['AwayTeam'] == away]
         if partite_trasferta.empty:
-            print(f"Errore: Squadra trasferta {away} non trovata")
             return default_response
             
         gol_fatti_trasferta = partite_trasferta['FTAG'].mean()
@@ -164,7 +158,7 @@ def read_root():
     return {"status": "Schizzo Analytics Engine V5.3 è online."}
 
 @app.post("/predict")
-def predict_match(request: MatchRequest):
+async def predict_match(request: MatchRequest):
     home = request.home.strip().title()
     away = request.away.strip().title()
     
@@ -187,11 +181,15 @@ def predict_match(request: MatchRequest):
          
     rischio_base = 1.7 * request.arbitro_severity
     modello_predittivo = calcola_pronostico_poisson(home, away)
+    
+    # Integrazione Panel Esperti
+    panel_esperti = await esperti.get_tutti_esperti(request.match_id)
          
     return {
         "match": f"{home} vs {away}",
         "rischio_cartellini": round(rischio_base, 2),
         "modello_poisson": modello_predittivo,
+        "panel_esperti": panel_esperti,
         "alert": alerts,
         "stats": stats_match,
         "status": "Analisi completata"
