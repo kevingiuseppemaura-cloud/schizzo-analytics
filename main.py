@@ -6,7 +6,7 @@ import os
 import uvicorn
 import esperti
 
-app = FastAPI(title="Schizzo Analytics Engine - V5.9 Formula 76")
+app = FastAPI(title="Schizzo Analytics Engine - V6.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -30,6 +30,21 @@ def carica_statistiche():
             except: return {}
     return {}
 
+def get_statistiche_dinamiche(tutte_le_stats, nome_squadra):
+    # Se la squadra esiste nel JSON, la restituisce
+    if nome_squadra in tutte_le_stats:
+        return tutte_le_stats[nome_squadra]
+    
+    # Se la squadra non esiste, calcola la media del campionato
+    n = len(tutte_le_stats)
+    if n == 0: return {"gialli": 0, "rossi": 0, "falli": 0}
+    
+    return {
+        "gialli": sum(s.get('gialli', 0) for s in tutte_le_stats.values()) / n,
+        "rossi": sum(s.get('rossi', 0) for s in tutte_le_stats.values()) / n,
+        "falli": sum(s.get('falli', 0) for s in tutte_le_stats.values()) / n
+    }
+
 def get_poisson_data(home_stats, away_stats):
     return {
         "mercato_1X2": {"1": "45%", "X": "25%", "2": "30%"},
@@ -42,18 +57,9 @@ def get_poisson_data(home_stats, away_stats):
             "U/O 4.5": {"Under": "85%", "Over": "15%"}
         },
         "multigol_completo": {
-            "Multigol 1-2": "40%",
-            "Multigol 1-3": "60%",
-            "Multigol 1-4": "75%",
-            "Multigol 2-3": "35%",
-            "Multigol 2-4": "50%"
+            "Multigol 1-2": "40%", "Multigol 1-3": "60%", "Multigol 1-4": "75%", "Multigol 2-3": "35%", "Multigol 2-4": "50%"
         },
-        "risultati_esatti": {
-            "1-0": "15%",
-            "1-1": "12%",
-            "2-1": "10%"
-        },
-        "xG": {"home": 1.5, "away": 1.2}
+        "risultati_esatti": {"1-0": "15%", "1-1": "12%", "2-1": "10%"}
     }
 
 @app.post("/predict")
@@ -66,44 +72,26 @@ async def predict_match(request: MatchRequest):
     away = mappa.get(away, away)
     
     tutte_le_stats = carica_statistiche()
-    default = {"gialli": 60, "rossi": 3, "falli": 450}
+    h_stats = get_statistiche_dinamiche(tutte_le_stats, home)
+    a_stats = get_statistiche_dinamiche(tutte_le_stats, away)
     
-    h_stats = tutte_le_stats.get(home, default)
-    a_stats = tutte_le_stats.get(away, default)
+    # FORMULA: ((GialliTot + RossiTot) / 76) * Severità
+    g_tot = float(h_stats.get('gialli', 0)) + float(a_stats.get('gialli', 0))
+    r_tot = float(h_stats.get('rossi', 0)) + float(a_stats.get('rossi', 0))
+    rischio_finale = ((g_tot + r_tot) / 76) * request.arbitro_severity
     
-    # NUOVA FORMULA: (Totale Gialli + Rossi / 76) * Severità
-    totale_gialli = float(h_stats.get('gialli', 0)) + float(a_stats.get('gialli', 0))
-    totale_rossi = float(h_stats.get('rossi', 0)) + float(a_stats.get('rossi', 0))
-    
-    rischio_finale = ((totale_gialli + totale_rossi) / 76) * request.arbitro_severity
-    
-    # Dati Poisson
-    dati_poisson = get_poisson_data(h_stats, a_stats)
-    
-    # Panel Esperti
-    try:
-        panel_esperti = await esperti.get_tutti_esperti(request.match_id)
-    except Exception:
-        panel_esperti = {"Status": "Errore caricamento esperti"}
-    
-    print(f"DEBUG -> Formula: ({totale_gialli}G + {totale_rossi}R) / 76 * {request.arbitro_severity} = {rischio_finale:.2f}")
+    panel_esperti = {}
+    try: panel_esperti = await esperti.get_tutti_esperti(request.match_id)
+    except: panel_esperti = {"Status": "Offline"}
 
     return {
         "match": f"{home} vs {away}",
         "rischio_cartellini": round(rischio_finale, 2),
         "stats": {
-            "home": {
-                "gialli": h_stats.get('gialli'), 
-                "rossi": h_stats.get('rossi'), 
-                "falli": h_stats.get('falli')
-            },
-            "away": {
-                "gialli": a_stats.get('gialli'), 
-                "rossi": a_stats.get('rossi'), 
-                "falli": a_stats.get('falli')
-            }
+            "home": {"gialli": round(h_stats.get('gialli',0),1), "rossi": round(h_stats.get('rossi',0),1), "falli": round(h_stats.get('falli',0),1)},
+            "away": {"gialli": round(a_stats.get('gialli',0),1), "rossi": round(a_stats.get('rossi',0),1), "falli": round(a_stats.get('falli',0),1)}
         },
-        "modello_poisson": dati_poisson,
+        "modello_poisson": get_poisson_data(h_stats, a_stats),
         "panel_esperti": panel_esperti
     }
 
