@@ -78,7 +78,7 @@ async def predict_match(request: MatchRequest):
     
     # 1. Rischio Cartellini (Formula 38)
     media_home = calcola_media_partita(home_stats)
-    media_away = calcola_media_partita(media_away := calcola_media_partita(away_stats)) # refactor per brevità
+    media_away = calcola_media_partita(away_stats)
     rischio_finale = ((media_home + media_away) / 2) * request.arbitro_severity
     
     # 2. Dati Poisson
