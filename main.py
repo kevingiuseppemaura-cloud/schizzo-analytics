@@ -5,8 +5,14 @@ import json
 import os
 import uvicorn
 import esperti
+import init_db  # Importa il tuo script di inizializzazione
 
 app = FastAPI(title="Schizzo Analytics Engine - V6.0")
+
+# Inizializza il database all'avvio del server
+@app.on_event("startup")
+def startup_event():
+    init_db.init_db()
 
 app.add_middleware(
     CORSMiddleware,
@@ -31,11 +37,9 @@ def carica_statistiche():
     return {}
 
 def get_statistiche_dinamiche(tutte_le_stats, nome_squadra):
-    # Se la squadra esiste nel JSON, la restituisce
     if nome_squadra in tutte_le_stats:
         return tutte_le_stats[nome_squadra]
     
-    # Se la squadra non esiste, calcola la media del campionato
     n = len(tutte_le_stats)
     if n == 0: return {"gialli": 0, "rossi": 0, "falli": 0}
     
@@ -75,17 +79,15 @@ async def predict_match(request: MatchRequest):
     h_stats = get_statistiche_dinamiche(tutte_le_stats, home)
     a_stats = get_statistiche_dinamiche(tutte_le_stats, away)
     
-    # FORMULA: ((GialliTot + RossiTot) / 76) * Severità
     g_tot = float(h_stats.get('gialli', 0)) + float(a_stats.get('gialli', 0))
     r_tot = float(h_stats.get('rossi', 0)) + float(a_stats.get('rossi', 0))
     rischio_finale = ((g_tot + r_tot) / 76) * request.arbitro_severity
     
-    panel_esperti = {}
+    # Lettura sincrona dal database
     try: 
-        # Chiamata sincrona al database SQLite
         panel_esperti = esperti.get_tutti_esperti(request.match_id)
-    except: 
-        panel_esperti = {"Status": "Offline o non disponibile"}
+    except Exception as e: 
+        panel_esperti = {"Status": "Errore", "Dettaglio": str(e)}
 
     return {
         "match": f"{home} vs {away}",
@@ -98,13 +100,8 @@ async def predict_match(request: MatchRequest):
         "panel_esperti": panel_esperti
     }
 
-# --- NUOVO ENDPOINT PER IL LETTORE FLUTTER ---
 @app.get("/get_esperti/{match_id}")
 def api_get_esperti(match_id: str):
-    """
-    Endpoint dedicato alla lettura del database esperti.
-    Viene chiamato in asincrono dall'app Flutter.
-    """
     try:
         return esperti.get_tutti_esperti(match_id)
     except Exception as e:
