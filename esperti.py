@@ -1,37 +1,41 @@
-import asyncio
-import random
+import sqlite3
+import os
 
-# Questa è la struttura base che utilizzeremo.
-# Per ora, simuliamo il recupero dati. 
-# Quando saremo pronti, sostituiremo i 'return' con le chiamate vere.
+def init_db():
+    """Crea il database e la tabella se non esistono."""
+    conn = sqlite3.connect('esperti.db')
+    cursor = conn.cursor()
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS pronostici (
+            match_id TEXT, 
+            fonte TEXT, 
+            valore TEXT
+        )
+    ''')
+    conn.commit()
+    conn.close()
 
-async def get_veggente_insight(match_id: str):
-    # Qui inseriremo la logica di scraping per ilveggente.it
-    await asyncio.sleep(0.5) # Simula latenza rete
-    return "Over 2.5"
-
-async def get_90min_insight(match_id: str):
-    # Qui inseriremo la logica di scraping per 90min.com
-    await asyncio.sleep(0.5)
-    return "Segno 1"
-
-async def get_metlive_insight(match_id: str):
-    # Qui inseriremo la logica di scraping per metlive.it
-    await asyncio.sleep(0.5)
-    return "GOL/GOL"
-
-async def get_tutti_esperti(match_id: str):
-    """
-    Esegue tutte le chiamate in parallelo per velocità massima.
-    """
-    results = await asyncio.gather(
-        get_veggente_insight(match_id),
-        get_90min_insight(match_id),
-        get_metlive_insight(match_id)
-    )
+def get_tutti_esperti(match_id: str):
+    """Legge i pronostici dal database locale."""
+    # Assicuriamoci che la tabella esista prima di leggere
+    init_db()
     
-    return {
-        "il_veggente": results[0],
-        "90min": results[1],
-        "metlive": results[2]
-    }
+    conn = sqlite3.connect('esperti.db')
+    cursor = conn.cursor()
+    
+    try:
+        cursor.execute("SELECT fonte, valore FROM pronostici WHERE match_id = ?", (match_id,))
+        rows = cursor.fetchall()
+        conn.close()
+        
+        if not rows:
+            return {
+                "il_veggente": "In attesa di aggiornamento...",
+                "90min": "In attesa di aggiornamento...",
+                "metlive": "In attesa di aggiornamento..."
+            }
+        
+        return {fonte: valore for fonte, valore in rows}
+    except Exception as e:
+        conn.close()
+        return {"Status": "Errore", "Dettaglio": str(e)}
