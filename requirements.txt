@@ -4,4 +4,4 @@ requests
 cachetools
 pydantic
 pandas
-beautifulSoup
+beautifulsoup4
