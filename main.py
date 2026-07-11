@@ -81,8 +81,11 @@ async def predict_match(request: MatchRequest):
     rischio_finale = ((g_tot + r_tot) / 76) * request.arbitro_severity
     
     panel_esperti = {}
-    try: panel_esperti = await esperti.get_tutti_esperti(request.match_id)
-    except: panel_esperti = {"Status": "Offline"}
+    try: 
+        # Chiamata sincrona al database SQLite
+        panel_esperti = esperti.get_tutti_esperti(request.match_id)
+    except: 
+        panel_esperti = {"Status": "Offline o non disponibile"}
 
     return {
         "match": f"{home} vs {away}",
@@ -94,6 +97,18 @@ async def predict_match(request: MatchRequest):
         "modello_poisson": get_poisson_data(h_stats, a_stats),
         "panel_esperti": panel_esperti
     }
+
+# --- NUOVO ENDPOINT PER IL LETTORE FLUTTER ---
+@app.get("/get_esperti/{match_id}")
+def api_get_esperti(match_id: str):
+    """
+    Endpoint dedicato alla lettura del database esperti.
+    Viene chiamato in asincrono dall'app Flutter.
+    """
+    try:
+        return esperti.get_tutti_esperti(match_id)
+    except Exception as e:
+        return {"Status": "Errore", "Dettaglio": str(e)}
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)
