@@ -28,7 +28,6 @@ except ImportError:
 # Inizializzazione dell'app FastAPI
 app = FastAPI(title="Schizzo API - Motore Dinamico")
 
-# Modello dati in ingresso dall'app Flutter
 class MatchRequest(BaseModel):
     match_id: str
     home: str
@@ -38,58 +37,79 @@ class MatchRequest(BaseModel):
 # COMPARTO 1: MOTORE MATEMATICO (POISSON)
 # ---------------------------------------------------------
 def poisson_probability(k, lmbda):
-    """Calcola la probabilità di fare 'k' gol dato un valore atteso 'lmbda'"""
     return (math.exp(-lmbda) * (lmbda ** k)) / math.factorial(k)
 
 def calcola_poisson(dati_dinamici, config_statica, moltiplicatore):
-    """
-    Motore matematico basato su distribuzione di Poisson.
-    Calcola le probabilità su una matrice di risultati esatti (0-5 gol).
-    """
-    # 1. Definizione Expected Goals (xG) base
-    xg_home_base = 1.5 
-    xg_away_base = 1.1 
+    # Definizione Expected Goals (xG) base
+    xg_home = 1.5 * moltiplicatore
+    xg_away = 1.1 / (moltiplicatore if moltiplicatore > 0 else 1)
     
-    # 2. Applicazione del moltiplicatore dinamico
-    xg_home = xg_home_base * moltiplicatore
-    xg_away = xg_away_base / (moltiplicatore if moltiplicatore > 0 else 1)
+    max_gol = 6 # Calcolo fino a 6 gol per coprire tutti i mercati
     
-    # 3. Calcolo matrice esatta
-    max_gol = 5
+    # Inizializzazione variabili
     prob_1, prob_x, prob_2 = 0.0, 0.0, 0.0
-    prob_over, prob_under, prob_gol, prob_nogol = 0.0, 0.0, 0.0, 0.0
+    prob_gol, prob_nogol = 0.0, 0.0
+    multigol_1_3 = 0.0
     
+    # Strutture per nuovi dati
+    matrix_scores = []
+    # Inizializziamo dizionari per Under/Over
+    u_o_data = {soglia: 0.0 for soglia in [0.5, 1.5, 2.5, 3.5, 4.5, 5.5]}
+    
+    # Ciclo di calcolo probabilità
     for h in range(max_gol + 1):
         for a in range(max_gol + 1):
             prob_match = poisson_probability(h, xg_home) * poisson_probability(a, xg_away)
             
+            # 1X2
             if h > a: prob_1 += prob_match
             elif h == a: prob_x += prob_match
             else: prob_2 += prob_match
-                
-            if (h + a) > 2: prob_over += prob_match
-            else: prob_under += prob_match
-                
+            
+            # Gol/NoGol
             if h > 0 and a > 0: prob_gol += prob_match
             else: prob_nogol += prob_match
+            
+            # Risultati Esatti (per la Top 3)
+            matrix_scores.append((f"{h}-{a}", prob_match))
+            
+            # Under/Over (0.5 - 5.5)
+            somma_gol = h + a
+            for soglia in u_o_data:
+                if somma_gol < soglia:
+                    u_o_data[soglia] += prob_match
+            
+            # Multigol 1-3
+            if 1 <= somma_gol <= 3:
+                multigol_1_3 += prob_match
 
     totale = prob_1 + prob_x + prob_2
     
-    return {
+    # Preparazione Dizionario Risultato
+    risultato = {
         "1": f"{round((prob_1 / totale) * 100, 1)}%",
         "X": f"{round((prob_x / totale) * 100, 1)}%",
         "2": f"{round((prob_2 / totale) * 100, 1)}%",
-        "Over 2.5": f"{round((prob_over / totale) * 100, 1)}%",
-        "Under 2.5": f"{round((prob_under / totale) * 100, 1)}%",
         "Gol": f"{round((prob_gol / totale) * 100, 1)}%",
-        "NoGol": f"{round((prob_nogol / totale) * 100, 1)}%"
+        "NoGol": f"{round((prob_nogol / totale) * 100, 1)}%",
+        "Multigol 1-3": f"{round((multigol_1_3 / totale) * 100, 1)}%"
     }
+    
+    # Aggiunta dinamica Under/Over
+    for soglia, prob in u_o_data.items():
+        risultato[f"Under {soglia}"] = f"{round((prob / totale) * 100, 1)}%"
+        risultato[f"Over {soglia}"] = f"{round(((totale - prob) / totale) * 100, 1)}%"
+        
+    # Aggiunta Top 3 Risultati Esatti
+    top_3 = sorted(matrix_scores, key=lambda x: x[1], reverse=True)[:3]
+    risultato["Top 3 Ris. Esatti"] = ", ".join([f"{r[0]}" for r in top_3])
+    
+    return risultato
 
 @app.post("/predict")
 async def get_prediction(request: MatchRequest):
     try:
         dati_dinamici = get_dati_dinamici(request.home, request.away, request.match_id)
-        
         config_statica = {
             "stadio": DB_STADI.get(request.home, {}),
             "arbitro": DB_ARBITRI.get(request.match_id, {})
@@ -106,7 +126,6 @@ async def get_prediction(request: MatchRequest):
         risultato = calcola_poisson(dati_dinamici, config_statica, moltiplicatore)
         
         return {"risultato": risultato}
-
     except Exception as e:
         print(f"Errore: {e}")
         raise HTTPException(status_code=500, detail="Errore elaborazione Schizzo")
@@ -122,10 +141,8 @@ async def get_esperti(match_id: str):
         cursor.execute('SELECT fonte, valore FROM pronostici WHERE match_id = ?', (match_id,))
         rows = cursor.fetchall()
         conn.close()
-        
         risultati = {row[0]: row[1] for row in rows} if rows else {"msg": "Nessun esperto disponibile"}
         return {"match_id": match_id, "esperti": risultati}
-
     except Exception as e:
         return {"match_id": match_id, "esperti": {"errore": str(e)}}
 
