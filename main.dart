@@ -35,7 +35,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   final String awayTeam = "Milan";
 
   Future<Map<String, dynamic>> fetchDashboardData() async {
-    final String baseUrl = 'http://192.168.1.11'; // Porta 8000 (FastAPI)
+    final String baseUrl = 'https://schizzo-analytics.onrender.com';
 
     // 1. Chiamata POST per il Motore Matematico (Poisson)
     final statsResponse = await http.post(
