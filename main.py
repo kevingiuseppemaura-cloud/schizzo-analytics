@@ -1,111 +1,134 @@
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-import json
-import os
 import uvicorn
-import esperti
-import init_db  # Importa il tuo script di inizializzazione
+import sqlite3
+import math
+import os
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
 
-app = FastAPI(title="Schizzo Analytics Engine - V6.0")
+# Import dell'orchestratore dinamico e del gestore pesi
+from api_helper import get_dati_dinamici
+from weights import get_context_multiplier
 
-# Inizializza il database all'avvio del server
-@app.on_event("startup")
-def startup_event():
-    init_db.init_db()
+# Import dei database statici
+try:
+    from database_stadi import DB_STADI
+except ImportError:
+    DB_STADI = {}
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+try:
+    from database_arbitri import DB_ARBITRI
+except ImportError:
+    DB_ARBITRI = {}
 
+try:
+    from database_allenatori import DB_ALLENATORI
+except ImportError:
+    DB_ALLENATORI = {}
+
+# Inizializzazione dell'app FastAPI
+app = FastAPI(title="Schizzo API - Motore Dinamico")
+
+# Modello dati in ingresso dall'app Flutter
 class MatchRequest(BaseModel):
+    match_id: str
     home: str
     away: str
-    match_id: str
-    arbitro_severity: float = 1.0
 
-def carica_statistiche():
-    percorso = os.path.join(os.getcwd(), 'statistiche_complete.json')
-    if os.path.exists(percorso):
-        with open(percorso, 'r', encoding='utf-8') as f:
-            try: return json.load(f)
-            except: return {}
-    return {}
+# ---------------------------------------------------------
+# COMPARTO 1: MOTORE MATEMATICO (POISSON)
+# ---------------------------------------------------------
+def poisson_probability(k, lmbda):
+    """Calcola la probabilità di fare 'k' gol dato un valore atteso 'lmbda'"""
+    return (math.exp(-lmbda) * (lmbda ** k)) / math.factorial(k)
 
-def get_statistiche_dinamiche(tutte_le_stats, nome_squadra):
-    if nome_squadra in tutte_le_stats:
-        return tutte_le_stats[nome_squadra]
+def calcola_poisson(dati_dinamici, config_statica, moltiplicatore):
+    """
+    Motore matematico basato su distribuzione di Poisson.
+    Calcola le probabilità su una matrice di risultati esatti (0-5 gol).
+    """
+    # 1. Definizione Expected Goals (xG) base
+    xg_home_base = 1.5 
+    xg_away_base = 1.1 
     
-    n = len(tutte_le_stats)
-    if n == 0: return {"gialli": 0, "rossi": 0, "falli": 0}
+    # 2. Applicazione del moltiplicatore dinamico
+    xg_home = xg_home_base * moltiplicatore
+    xg_away = xg_away_base / (moltiplicatore if moltiplicatore > 0 else 1)
+    
+    # 3. Calcolo matrice esatta
+    max_gol = 5
+    prob_1, prob_x, prob_2 = 0.0, 0.0, 0.0
+    prob_over, prob_under, prob_gol, prob_nogol = 0.0, 0.0, 0.0, 0.0
+    
+    for h in range(max_gol + 1):
+        for a in range(max_gol + 1):
+            prob_match = poisson_probability(h, xg_home) * poisson_probability(a, xg_away)
+            
+            if h > a: prob_1 += prob_match
+            elif h == a: prob_x += prob_match
+            else: prob_2 += prob_match
+                
+            if (h + a) > 2: prob_over += prob_match
+            else: prob_under += prob_match
+                
+            if h > 0 and a > 0: prob_gol += prob_match
+            else: prob_nogol += prob_match
+
+    totale = prob_1 + prob_x + prob_2
     
     return {
-        "gialli": sum(s.get('gialli', 0) for s in tutte_le_stats.values()) / n,
-        "rossi": sum(s.get('rossi', 0) for s in tutte_le_stats.values()) / n,
-        "falli": sum(s.get('falli', 0) for s in tutte_le_stats.values()) / n
-    }
-
-def get_poisson_data(home_stats, away_stats):
-    return {
-        "mercato_1X2": {"1": "45%", "X": "25%", "2": "30%"},
-        "gol_nogol": {"Gol": "55%", "No Gol": "45%"},
-        "under_over_completo": {
-            "U/O 0.5": {"Under": "10%", "Over": "90%"},
-            "U/O 1.5": {"Under": "30%", "Over": "70%"},
-            "U/O 2.5": {"Under": "55%", "Over": "45%"},
-            "U/O 3.5": {"Under": "75%", "Over": "25%"},
-            "U/O 4.5": {"Under": "85%", "Over": "15%"}
-        },
-        "multigol_completo": {
-            "Multigol 1-2": "40%", "Multigol 1-3": "60%", "Multigol 1-4": "75%", "Multigol 2-3": "35%", "Multigol 2-4": "50%"
-        },
-        "risultati_esatti": {"1-0": "15%", "1-1": "12%", "2-1": "10%"}
+        "1": f"{round((prob_1 / totale) * 100, 1)}%",
+        "X": f"{round((prob_x / totale) * 100, 1)}%",
+        "2": f"{round((prob_2 / totale) * 100, 1)}%",
+        "Over 2.5": f"{round((prob_over / totale) * 100, 1)}%",
+        "Under 2.5": f"{round((prob_under / totale) * 100, 1)}%",
+        "Gol": f"{round((prob_gol / totale) * 100, 1)}%",
+        "NoGol": f"{round((prob_nogol / totale) * 100, 1)}%"
     }
 
 @app.post("/predict")
-async def predict_match(request: MatchRequest):
-    home = request.home.strip().title()
-    away = request.away.strip().title()
-    
-    mappa = {"Juve": "Juventus", "Inter Milan": "Inter", "Int": "Inter", "Verona": "Hellas Verona"}
-    home = mappa.get(home, home)
-    away = mappa.get(away, away)
-    
-    tutte_le_stats = carica_statistiche()
-    h_stats = get_statistiche_dinamiche(tutte_le_stats, home)
-    a_stats = get_statistiche_dinamiche(tutte_le_stats, away)
-    
-    g_tot = float(h_stats.get('gialli', 0)) + float(a_stats.get('gialli', 0))
-    r_tot = float(h_stats.get('rossi', 0)) + float(a_stats.get('rossi', 0))
-    rischio_finale = ((g_tot + r_tot) / 76) * request.arbitro_severity
-    
-    # Lettura sincrona dal database
-    try: 
-        panel_esperti = esperti.get_tutti_esperti(request.match_id)
-    except Exception as e: 
-        panel_esperti = {"Status": "Errore", "Dettaglio": str(e)}
-
-    return {
-        "match": f"{home} vs {away}",
-        "rischio_cartellini": round(rischio_finale, 2),
-        "stats": {
-            "home": {"gialli": round(h_stats.get('gialli',0),1), "rossi": round(h_stats.get('rossi',0),1), "falli": round(h_stats.get('falli',0),1)},
-            "away": {"gialli": round(a_stats.get('gialli',0),1), "rossi": round(a_stats.get('rossi',0),1), "falli": round(a_stats.get('falli',0),1)}
-        },
-        "modello_poisson": get_poisson_data(h_stats, a_stats),
-        "panel_esperti": panel_esperti
-    }
-
-@app.get("/get_esperti/{match_id}")
-def api_get_esperti(match_id: str):
+async def get_prediction(request: MatchRequest):
     try:
-        return esperti.get_tutti_esperti(match_id)
+        dati_dinamici = get_dati_dinamici(request.home, request.away, request.match_id)
+        
+        config_statica = {
+            "stadio": DB_STADI.get(request.home, {}),
+            "arbitro": DB_ARBITRI.get(request.match_id, {})
+        }
+        
+        contesto_match = {
+            "stadio_tipo": config_statica["stadio"].get("tipo_prato", "naturale"),
+            "giocatori_chiave_out": dati_dinamici["infortuni"][request.home].get("giocatori_out", 0) > 2 or \
+                                    dati_dinamici["infortuni"][request.away].get("giocatori_out", 0) > 2,
+            "arbitro_severo": config_statica["arbitro"].get("severo", False)
+        }
+        
+        moltiplicatore = get_context_multiplier(contesto_match)
+        risultato = calcola_poisson(dati_dinamici, config_statica, moltiplicatore)
+        
+        return {"risultato": risultato}
+
     except Exception as e:
-        return {"Status": "Errore", "Dettaglio": str(e)}
+        print(f"Errore: {e}")
+        raise HTTPException(status_code=500, detail="Errore elaborazione Schizzo")
+
+# ---------------------------------------------------------
+# COMPARTO 2: PANEL ESPERTI
+# ---------------------------------------------------------
+@app.get("/esperti/{match_id}")
+async def get_esperti(match_id: str):
+    try:
+        conn = sqlite3.connect('esperti.db')
+        cursor = conn.cursor()
+        cursor.execute('SELECT fonte, valore FROM pronostici WHERE match_id = ?', (match_id,))
+        rows = cursor.fetchall()
+        conn.close()
+        
+        risultati = {row[0]: row[1] for row in rows} if rows else {"msg": "Nessun esperto disponibile"}
+        return {"match_id": match_id, "esperti": risultati}
+
+    except Exception as e:
+        return {"match_id": match_id, "esperti": {"errore": str(e)}}
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    port = int(os.environ.get("PORT", 8000))
+    uvicorn.run("main:app", host="0.0.0.0", port=port)

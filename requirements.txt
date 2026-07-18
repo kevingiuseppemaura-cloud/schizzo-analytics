@@ -1,7 +1,9 @@
 fastapi
 uvicorn
 requests
+httpx
 cachetools
 pydantic
 pandas
 beautifulsoup4
+python-multipart
