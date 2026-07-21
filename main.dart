@@ -269,7 +269,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     // 4. Modulo Whale Alert (Pronto per la Fase 3)
                     AnalysisCard(
                       title: "Whale Alert",
-                      icon: Icons.warning_amber_round,
+                      icon: Icons.warning_amber_rounded,
                       themeColor: Colors.redAccent,
                       badgeText: "SOON",
                       data: const {},

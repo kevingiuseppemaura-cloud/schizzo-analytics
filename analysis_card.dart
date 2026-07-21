@@ -64,7 +64,7 @@ class AnalysisCard extends StatelessWidget {
                 ? const Center(
                     child: Text(
                       "Nessun dato disponibile per questo modulo.",
-                      style: TextStyle(color: Colors.grey, italic: true),
+                      style: TextStyle(color: Colors.grey, fontStyle: FontStyle.italic),
                     ),
                   )
                 : Column(
