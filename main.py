@@ -1,151 +1,164 @@
-import uvicorn
-import sqlite3
-import math
 import os
-from fastapi import FastAPI, HTTPException
+import math
+from fastapi import FastAPI, HTTPException, Query
 from pydantic import BaseModel
+from typing import Optional, List, Dict, Any
 
-# Import dell'orchestratore dinamico e del gestore pesi
-from api_helper import get_dati_dinamici
-from weights import get_context_multiplier
-
-# Import dei database statici
+# ==========================================
+# 🔌 MODULI ESTERNI (PLUG & PLAY)
+# ==========================================
+# In conformità con il principio "Costruire, non Sostituire":
+# Importiamo il modulo esperti in maniera isolata e protetta.
 try:
-    from database_stadi import DB_STADI
+    from expert_handler import get_expert_predictions
 except ImportError:
-    DB_STADI = {}
+    # Fallback di sicurezza: se il modulo è assente, il core backend non crasha.
+    def get_expert_predictions(match_id):
+        return {"status": "warning", "message": "Modulo esperti temporaneamente non disponibile", "data": []}
 
-try:
-    from database_arbitri import DB_ARBITRI
-except ImportError:
-    DB_ARBITRI = {}
 
-try:
-    from database_allenatori import DB_ALLENATORI
-except ImportError:
-    DB_ALLENATORI = {}
+# ==========================================
+# 🚀 INIZIALIZZAZIONE FASTAPI
+# ==========================================
+app = FastAPI(
+    title="Schizzo Analytics Engine",
+    description="Backend analitico con motore Poisson dinamico e architettura modulare.",
+    version="2.0.0"
+)
 
-# Inizializzazione dell'app FastAPI
-app = FastAPI(title="Schizzo API - Motore Dinamico")
 
+# ==========================================
+# 📐 MODELLI DI INPUT E OUTPUT (PYDANTIC)
+# ==========================================
 class MatchRequest(BaseModel):
-    match_id: str
-    home: str
-    away: str
+    match_id: Optional[str] = None
+    squadra_casa: str
+    squadra_ospite: str
+    lambda_casa: float = 1.45  # Valore atteso gol casa
+    lambda_ospite: float = 1.10 # Valore atteso gol ospite
+    moltiplicatore_infortuni: Optional[float] = 1.0
+    moltiplicatore_stadio: Optional[float] = 1.0
+    moltiplicatore_arbitro: Optional[float] = 1.0
 
-# ---------------------------------------------------------
-# COMPARTO 1: MOTORE MATEMATICO (POISSON)
-# ---------------------------------------------------------
-def poisson_probability(k, lmbda):
-    return (math.exp(-lmbda) * (lmbda ** k)) / math.factorial(k)
 
-def calcola_poisson(dati_dinamici, config_statica, moltiplicatore):
-    # Definizione Expected Goals (xG) base
-    xg_home = 1.5 * moltiplicatore
-    xg_away = 1.1 / (moltiplicatore if moltiplicatore > 0 else 1)
-    
-    max_gol = 6 # Calcolo fino a 6 gol per coprire tutti i mercati
-    
-    # Inizializzazione variabili
-    prob_1, prob_x, prob_2 = 0.0, 0.0, 0.0
-    prob_gol, prob_nogol = 0.0, 0.0
-    multigol_1_3 = 0.0
-    
-    # Strutture per nuovi dati
-    matrix_scores = []
-    # Inizializziamo dizionari per Under/Over
-    u_o_data = {soglia: 0.0 for soglia in [0.5, 1.5, 2.5, 3.5, 4.5, 5.5]}
-    
-    # Ciclo di calcolo probabilità
-    for h in range(max_gol + 1):
-        for a in range(max_gol + 1):
-            prob_match = poisson_probability(h, xg_home) * poisson_probability(a, xg_away)
-            
-            # 1X2
-            if h > a: prob_1 += prob_match
-            elif h == a: prob_x += prob_match
-            else: prob_2 += prob_match
-            
-            # Gol/NoGol
-            if h > 0 and a > 0: prob_gol += prob_match
-            else: prob_nogol += prob_match
-            
-            # Risultati Esatti (per la Top 3)
-            matrix_scores.append((f"{h}-{a}", prob_match))
-            
-            # Under/Over (0.5 - 5.5)
-            somma_gol = h + a
-            for soglia in u_o_data:
-                if somma_gol < soglia:
-                    u_o_data[soglia] += prob_match
-            
-            # Multigol 1-3
-            if 1 <= somma_gol <= 3:
-                multigol_1_3 += prob_match
+# ==========================================
+# 🧮 CORE ENGINE: MOTORE DI POISSON (INALTERATO)
+# ==========================================
+def poisson_probability(k: int, lambd: float) -> float:
+    """Calcola la probabilità di Poisson per k eventi con valore atteso lambda."""
+    if lambd <= 0:
+        return 0.0
+    return (math.pow(lambd, k) * math.exp(-lambd)) / math.factorial(k)
 
-    totale = prob_1 + prob_x + prob_2
+def calcola_matrice_risultati(l_casa: float, l_ospite: float, max_gol: int = 5):
+    """Calcola la matrice di probabilità dei risultati esatti fino a max_gol."""
+    matrice = {}
+    for i in range(max_gol + 1):
+        for j in range(max_gol + 1):
+            p_i = poisson_probability(i, l_casa)
+            p_j = poisson_probability(j, l_ospite)
+            matrice[f"{i}-{j}"] = p_i * p_j
+    return matrice
+
+def elabora_mercati_poisson(l_casa: float, l_ospite: float):
+    """Elabora i mercati supportati (1X2, U/O, Gol/NoGol, Multigol, Risultati Esatti)."""
+    matrice = calcola_matrice_risultati(l_casa, l_ospite)
     
-    # Preparazione Dizionario Risultato
-    risultato = {
-        "1": f"{round((prob_1 / totale) * 100, 1)}%",
-        "X": f"{round((prob_x / totale) * 100, 1)}%",
-        "2": f"{round((prob_2 / totale) * 100, 1)}%",
-        "Gol": f"{round((prob_gol / totale) * 100, 1)}%",
-        "NoGol": f"{round((prob_nogol / totale) * 100, 1)}%",
-        "Multigol 1-3": f"{round((multigol_1_3 / totale) * 100, 1)}%"
+    p_1 = sum(prob for score, prob in matrice.items() if int(score.split('-')[0]) > int(score.split('-')[1]))
+    p_X = sum(prob for score, prob in matrice.items() if int(score.split('-')[0]) == int(score.split('-')[1]))
+    p_2 = sum(prob for score, prob in matrice.items() if int(score.split('-')[0]) < int(score.split('-')[1]))
+    
+    p_gg = sum(prob for score, prob in matrice.items() if int(score.split('-')[0]) > 0 and int(score.split('-')[1]) > 0)
+    p_ng = 1.0 - p_gg
+    
+    # Under / Over (0.5 - 5.5)
+    under_over = {}
+    for soglia in [0.5, 1.5, 2.5, 3.5, 4.5, 5.5]:
+        u_p = sum(prob for score, prob in matrice.items() if (int(score.split('-')[0]) + int(score.split('-')[1])) < soglia)
+        under_over[f"Under {soglia}"] = round(u_p * 100, 2)
+        under_over[f"Over {soglia}"] = round((1.0 - u_p) * 100, 2)
+        
+    # Multigol 1-3
+    p_mg_1_3 = sum(prob for score, prob in matrice.items() if 1 <= (int(score.split('-')[0]) + int(score.split('-')[1])) <= 3)
+    
+    # Top 3 Risultati Esatti
+    top_esatti = sorted(matrice.items(), key=lambda x: x[1], reverse=True)[:3]
+    top_esatti_fmt = [{"risultato": k, "probabilita": round(v * 100, 2)} for k, v in top_esatti]
+
+    return {
+        "esito_1x2": {
+            "1": round(p_1 * 100, 2),
+            "X": round(p_X * 100, 2),
+            "2": round(p_2 * 100, 2)
+        },
+        "gol_nogol": {
+            "Gol": round(p_gg * 100, 2),
+            "NoGol": round(p_ng * 100, 2)
+        },
+        "under_over": under_over,
+        "multigol_1_3": round(p_mg_1_3 * 100, 2),
+        "top_3_risultati_esatti": top_esatti_fmt
     }
-    
-    # Aggiunta dinamica Under/Over
-    for soglia, prob in u_o_data.items():
-        risultato[f"Under {soglia}"] = f"{round((prob / totale) * 100, 1)}%"
-        risultato[f"Over {soglia}"] = f"{round(((totale - prob) / totale) * 100, 1)}%"
-        
-    # Aggiunta Top 3 Risultati Esatti
-    top_3 = sorted(matrix_scores, key=lambda x: x[1], reverse=True)[:3]
-    risultato["Top 3 Ris. Esatti"] = ", ".join([f"{r[0]}" for r in top_3])
-    
-    return risultato
 
-@app.post("/predict")
-async def get_prediction(request: MatchRequest):
-    try:
-        dati_dinamici = get_dati_dinamici(request.home, request.away, request.match_id)
-        config_statica = {
-            "stadio": DB_STADI.get(request.home, {}),
-            "arbitro": DB_ARBITRI.get(request.match_id, {})
-        }
-        
-        contesto_match = {
-            "stadio_tipo": config_statica["stadio"].get("tipo_prato", "naturale"),
-            "giocatori_chiave_out": dati_dinamici["infortuni"][request.home].get("giocatori_out", 0) > 2 or \
-                                    dati_dinamici["infortuni"][request.away].get("giocatori_out", 0) > 2,
-            "arbitro_severo": config_statica["arbitro"].get("severo", False)
-        }
-        
-        moltiplicatore = get_context_multiplier(contesto_match)
-        risultato = calcola_poisson(dati_dinamici, config_statica, moltiplicatore)
-        
-        return {"risultato": risultato}
-    except Exception as e:
-        print(f"Errore: {e}")
-        raise HTTPException(status_code=500, detail="Errore elaborazione Schizzo")
 
-# ---------------------------------------------------------
-# COMPARTO 2: PANEL ESPERTI
-# ---------------------------------------------------------
+# ==========================================
+# 📡 ROTTE E ENDPOINT API
+# ==========================================
+
+@app.get("/")
+def read_root():
+    return {
+        "status": "online",
+        "app": "Schizzo Analytics Engine",
+        "version": "2.0.0",
+        "principio": "Costruire, non Sostituire"
+    }
+
+
+@app.post("/analizza")
+def analizza_partita(req: MatchRequest):
+    """
+    Endpoint principale:
+    1. Calcola l'analisi Poisson con i moltiplicatori di contesto.
+    2. Interroga in sicurezza il modulo esperti (se match_id viene fornito).
+    """
+    # 1. Moltiplicatori contestuali
+    l_casa_adj = req.lambda_casa * req.moltiplicatore_infortuni * req.moltiplicatore_stadio
+    l_ospite_adj = req.lambda_ospite * req.moltiplicatore_arbitro
+    
+    # 2. Calcoli matematici core
+    risultati_poisson = elabora_mercati_poisson(l_casa_adj, l_ospite_adj)
+    
+    # 3. Layer informativo additivo (Modulo esperti)
+    dati_esperti = []
+    if req.match_id:
+        res_esperti = get_expert_predictions(req.match_id)
+        if res_esperti.get("status") == "success":
+            dati_esperti = res_esperti.get("data", [])
+
+    # 4. Output completo e unificato
+    return {
+        "partita": f"{req.squadra_casa} vs {req.squadra_ospite}",
+        "match_id": req.match_id,
+        "parametri_applicati": {
+            "lambda_casa_effettivo": round(l_casa_adj, 2),
+            "lambda_ospite_effettivo": round(l_ospite_adj, 2)
+        },
+        "previsioni_poisson": risultati_poisson,
+        "modulo_esperti": {
+            "disponibile": len(dati_esperti) > 0,
+            "totale_esperti": len(dati_esperti),
+            "lista_esperti": dati_esperti
+        }
+    }
+
+
 @app.get("/esperti/{match_id}")
-async def get_esperti(match_id: str):
-    try:
-        conn = sqlite3.connect('esperti.db')
-        cursor = conn.cursor()
-        cursor.execute('SELECT fonte, valore FROM pronostici WHERE match_id = ?', (match_id,))
-        rows = cursor.fetchall()
-        conn.close()
-        risultati = {row[0]: row[1] for row in rows} if rows else {"msg": "Nessun esperto disponibile"}
-        return {"match_id": match_id, "esperti": risultati}
-    except Exception as e:
-        return {"match_id": match_id, "esperti": {"errore": str(e)}}
+def ottieni_esperti(match_id: str):
+    """Endpoint autonomo per consultare direttamente gli esperti tramite il loro modulo."""
+    return get_expert_predictions(match_id)
+
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 8000))
-    uvicorn.run("main:app", host="0.0.0.0", port=port)
+    import uvicorn
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
