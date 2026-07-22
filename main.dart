@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'widgets/team_search_input.dart';
-import 'widgets/analysis_card.dart'; // Import del nostro widget di layout espandibile
+import 'widgets/analysis_card.dart';
 
 void main() => runApp(const SchizzoApp());
 
@@ -12,9 +12,14 @@ class SchizzoApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Schizzo Dashboard',
+      title: 'Schizzo Analytics',
+      debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        primarySwatch: Colors.indigo,
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: const Color(0xFF1E3A8A), 
+          primary: const Color(0xFF1E3A8A),
+          secondary: const Color(0xFFFF6B00), 
+        ),
         useMaterial3: true,
       ),
       home: const DashboardScreen(),
@@ -30,70 +35,71 @@ class DashboardScreen extends StatefulWidget {
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
-  // 1. Variabili di Stato Dinamiche (con valori di default di test)
-  String matchId = "12345";
-  String homeTeam = "Juventus";
-  String awayTeam = "Milan";
+  String homeTeam = "";
+  String awayTeam = "";
 
-  // Future gestito nello stato per controllare l'esecuzione al tap del bottone
   Future<Map<String, dynamic>>? _dashboardFuture;
+  bool _haAnalizzato = false;
 
-  // Lista di squadre disponibili per l'Autocomplete
   final List<String> squadreDisponibili = [
-    'Atalanta', 'Bologna', 'Cagliari', 'Empoli', 'Fiorentina',
-    'Genoa', 'Inter', 'Juventus', 'Lazio', 'Lecce',
-    'Milan', 'Monza', 'Napoli', 'Parma', 'Roma',
-    'Salernitana', 'Sampdoria', 'Sassuolo', 'Torino', 'Udinese', 'Venezia', 'Verona'
+    'Atalanta', 'Bologna', 'Cagliari', 'Como', 'Cremonese', 'Empoli', 'Fiorentina',
+    'Frosinone', 'Genoa', 'Inter', 'Juventus', 'Lazio', 'Lecce', 'Mantova',
+    'Milan', 'Modena', 'Monza', 'Napoli', 'Palermo', 'Parma', 'Pisa', 'Roma',
+    'Salernitana', 'Sampdoria', 'Sassuolo', 'Sudtirol', 'Torino', 'Udinese', 'Venezia', 'Verona'
   ];
 
-  @override
-  void initState() {
-    super.initState();
-    // Prima chiamata automatica all'avvio
-    _dashboardFuture = fetchDashboardData();
-  }
-
-  // Metodo per scatenare una nuova analisi al click del bottone
   void _eseguiAnalisi() {
+    if (homeTeam.isEmpty || awayTeam.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Seleziona sia la squadra di casa che di trasferta!"),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+      return;
+    }
+
+    FocusScope.of(context).unfocus();
+
     setState(() {
+      _haAnalizzato = true;
       _dashboardFuture = fetchDashboardData();
     });
   }
 
   Future<Map<String, dynamic>> fetchDashboardData() async {
     final String baseUrl = 'https://schizzo-analytics.onrender.com';
+    final String internalMatchId = "${homeTeam.toLowerCase()}_${awayTeam.toLowerCase()}";
 
-    // 1. Chiamata POST per il Motore Matematico (Poisson)
     http.Response statsResponse = await http.post(
       Uri.parse('$baseUrl/analizza'),
       headers: {"Content-Type": "application/json"},
       body: json.encode({
-        "match_id": matchId,
+        "match_id": internalMatchId,
         "squadra_casa": homeTeam,
         "squadra_ospite": awayTeam,
       }),
     );
 
-    // Fallback di sicurezza: se la rotta /analizza non risponde, tenta /predict
     if (statsResponse.statusCode != 200) {
       statsResponse = await http.post(
         Uri.parse('$baseUrl/predict'),
         headers: {"Content-Type": "application/json"},
         body: json.encode({
-          "match_id": matchId,
+          "match_id": internalMatchId,
           "home": homeTeam,
           "away": awayTeam,
         }),
       );
     }
 
-    // 2. Chiamata GET per gli Esperti
-    final expertsResponse = await http.get(Uri.parse('$baseUrl/esperti/$matchId'));
+    final expertsResponse = await http.get(
+      Uri.parse('$baseUrl/esperti/$internalMatchId'),
+    );
 
     if (statsResponse.statusCode == 200) {
       final statsData = json.decode(statsResponse.body);
       
-      // Estrazione dinamica e sicura delle percentuali
       Map<String, dynamic> stats = {};
       if (statsData.containsKey('previsioni_poisson')) {
         stats = Map<String, dynamic>.from(statsData['previsioni_poisson']);
@@ -103,7 +109,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
         stats = statsData;
       }
 
-      // Estrazione sicura dei dati esperti
       Map<String, dynamic> experts = {};
       if (expertsResponse.statusCode == 200) {
         final expertsData = json.decode(expertsResponse.body);
@@ -114,9 +119,35 @@ class _DashboardScreenState extends State<DashboardScreen> {
         }
       }
 
+      Map<String, dynamic> infoContext = {};
+      if (statsData.containsKey('info_match')) {
+        infoContext = Map<String, dynamic>.from(statsData['info_match']);
+      } else if (statsData.containsKey('contesto')) {
+        infoContext = Map<String, dynamic>.from(statsData['contesto']);
+      } else {
+        infoContext = {
+          "Stadio Casa": "In attesa di lettura DB stadi",
+          "Terreno & Copertura": "Naturale/Sintetico - Coperto/Scoperto (Da DB)",
+          "Allenatore Casa": "Dato da DB Allenatori",
+          "Indice Tattico Casa": "Da 1 a 10 (Da DB)",
+          "Allenatore Ospite": "Dato da DB Allenatori",
+          "Indice Tattico Ospite": "Da 1 a 10 (Da DB)",
+          "Arbitro Designato": "In attesa di designazione",
+          "Severità Arbitro": "Da 1 a 10 (Da DB Arbitri)",
+          "Meteo Live": "OpenWeatherMap (Lat/Lon)",
+        };
+      }
+
+      Map<String, dynamic>? whaleData;
+      if (statsData.containsKey('whale_alert')) {
+        whaleData = Map<String, dynamic>.from(statsData['whale_alert']);
+      }
+
       return {
         "stats": stats,
         "experts": experts,
+        "info_match": infoContext,
+        "whale_alert": whaleData,
       };
     } else {
       throw Exception('Errore nel recupero dati: ${statsResponse.statusCode}');
@@ -126,17 +157,28 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("Analisi Match: Schizzo")),
+      backgroundColor: const Color(0xFFF4F6F9),
+      appBar: AppBar(
+        backgroundColor: const Color(0xFF1E3A8A), 
+        foregroundColor: Colors.white,
+        title: const Row(
+          children: [
+            Icon(Icons.bolt, color: Color(0xFFFF6B00)), 
+            SizedBox(width: 8),
+            Text(
+              "Schizzo Analytics",
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+          ],
+        ),
+      ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // ==========================================
-            // 🎛️ PANNELLO INPUT INTELLIGENTE
-            // ==========================================
             Card(
-              elevation: 3,
+              elevation: 2,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               child: Padding(
                 padding: const EdgeInsets.all(16.0),
@@ -145,57 +187,42 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   children: [
                     const Text(
                       "Seleziona Partita",
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                      style: TextStyle(
+                        fontSize: 18, 
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF1E3A8A),
+                      ),
                     ),
                     const SizedBox(height: 16),
                     
-                    // Input Squadra Casa con Autocomplete
                     TeamSearchInput(
                       label: "Squadra Casa",
                       availableTeams: squadreDisponibili,
                       onTeamSelected: (selected) {
-                        setState(() {
-                          homeTeam = selected;
-                        });
+                        setState(() { homeTeam = selected; });
                       },
                     ),
                     const SizedBox(height: 12),
 
-                    // Input Squadra Trasferta con Autocomplete
                     TeamSearchInput(
                       label: "Squadra Trasferta",
                       availableTeams: squadreDisponibili,
                       onTeamSelected: (selected) {
-                        setState(() {
-                          awayTeam = selected;
-                        });
-                      },
-                    ),
-                    const SizedBox(height: 12),
-
-                    // Campo Match ID
-                    TextField(
-                      decoration: InputDecoration(
-                        labelText: "Match ID (opzionale)",
-                        prefixIcon: const Icon(Icons.numbers),
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                      ),
-                      onChanged: (val) {
-                        matchId = val;
+                        setState(() { awayTeam = selected; });
                       },
                     ),
                     const SizedBox(height: 16),
 
-                    // Bottone Analizza
                     ElevatedButton.icon(
                       onPressed: _eseguiAnalisi,
                       style: ElevatedButton.styleFrom(
                         minimumSize: const Size.fromHeight(50),
-                        backgroundColor: Colors.indigo,
+                        backgroundColor: const Color(0xFF1E3A8A), 
                         foregroundColor: Colors.white,
+                        elevation: 3,
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       ),
-                      icon: const Icon(Icons.analytics),
+                      icon: const Icon(Icons.bolt, color: Color(0xFFFF6B00)),
                       label: const Text(
                         "ANALIZZA PARTITA",
                         style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
@@ -206,81 +233,147 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ),
             ),
 
-            const SizedBox(height: 20),
+            const SizedBox(height: 16),
 
-            // ==========================================
-            // 📊 RISULTATI ANALISI (CON ANALYSIS CARD)
-            // ==========================================
-            FutureBuilder<Map<String, dynamic>>(
-              future: _dashboardFuture,
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 40.0),
-                    child: Center(child: CircularProgressIndicator()),
-                  );
-                } else if (snapshot.hasError) {
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 20.0),
-                    child: Center(
-                      child: Text(
-                        "Errore: ${snapshot.error}",
-                        style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+            !_haAnalizzato
+                ? const Card(
+                    elevation: 1,
+                    child: Padding(
+                      padding: EdgeInsets.all(24.0),
+                      child: Column(
+                        children: [
+                          Icon(Icons.analytics_outlined, size: 48, color: Colors.grey),
+                          SizedBox(height: 12),
+                          Text(
+                            "Seleziona le squadre e premi 'ANALIZZA PARTITA' per avviare il calcolo.",
+                            textAlign: TextAlign.center,
+                            style: TextStyle(color: Colors.grey, fontSize: 14),
+                          ),
+                        ],
                       ),
                     ),
-                  );
-                } else if (!snapshot.hasData) {
-                  return const SizedBox.shrink();
-                }
+                  )
+                : FutureBuilder<Map<String, dynamic>>(
+                    future: _dashboardFuture,
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 40.0),
+                          child: Center(
+                            child: CircularProgressIndicator(color: Color(0xFFFF6B00)),
+                          ),
+                        );
+                      } else if (snapshot.hasError) {
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 20.0),
+                          child: Center(
+                            child: Text(
+                              "Errore: ${snapshot.error}",
+                              style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                        );
+                      } else if (!snapshot.hasData) {
+                        return const SizedBox.shrink();
+                      }
 
-                final data = snapshot.data!;
-                return Column(
-                  children: [
-                    // 1. Modulo Poisson (Attivo)
-                    AnalysisCard(
-                      title: "Statistiche Poisson ($homeTeam vs $awayTeam)",
-                      icon: Icons.functions,
-                      themeColor: Colors.indigo,
-                      badgeText: "MATH",
-                      data: data['stats'],
-                      initiallyExpanded: true,
-                    ),
+                      final data = snapshot.data!;
+                      final whaleData = data['whale_alert'];
+                      final infoData = data['info_match'] as Map<String, dynamic>? ?? {};
 
-                    // 2. Modulo Esperti (Attivo)
-                    AnalysisCard(
-                      title: "Consigli Esperti",
-                      icon: Icons.psychology,
-                      themeColor: Colors.orange[800]!,
-                      badgeText: "DB",
-                      data: data['experts'],
-                      initiallyExpanded: true,
-                    ),
+                      return Column(
+                        children: [
+                          if (whaleData != null && whaleData['attivo'] == true)
+                            _buildWhaleAlertBanner(
+                              volumeEffettivo: whaleData['volume_effettivo'] ?? "N/D",
+                              volumeNormale: whaleData['volume_normale'] ?? "N/D",
+                              sbilanciamento: whaleData['sbilanciamento'] ?? "N/D",
+                            ),
 
-                    // 3. Modulo Flussi Monetari (Pronto per la Fase 3)
-                    AnalysisCard(
-                      title: "Flussi Monetari",
-                      icon: Icons.attach_money,
-                      themeColor: Colors.green[700]!,
-                      badgeText: "SOON",
-                      data: const {},
-                      initiallyExpanded: false,
-                    ),
+                          AnalysisCard(
+                            title: "Info & Contesto Match",
+                            icon: Icons.stadium,
+                            themeColor: Colors.purple[700]!,
+                            badgeText: "INFO",
+                            data: infoData,
+                            initiallyExpanded: false,
+                          ),
 
-                    // 4. Modulo Whale Alert (Pronto per la Fase 3)
-                    AnalysisCard(
-                      title: "Whale Alert",
-                      icon: Icons.warning_amber_rounded,
-                      themeColor: Colors.redAccent,
-                      badgeText: "SOON",
-                      data: const {},
-                      initiallyExpanded: false,
-                    ),
-                  ],
-                );
-              },
-            ),
+                          AnalysisCard(
+                            title: "Statistiche Poisson ($homeTeam vs $awayTeam)",
+                            icon: Icons.functions,
+                            themeColor: const Color(0xFF1E3A8A),
+                            badgeText: "MATH",
+                            data: data['stats'] ?? {},
+                            initiallyExpanded: true,
+                          ),
+
+                          AnalysisCard(
+                            title: "Consigli Esperti",
+                            icon: Icons.psychology,
+                            themeColor: const Color(0xFFFF6B00),
+                            badgeText: "DB",
+                            data: data['experts'] ?? {},
+                            initiallyExpanded: false,
+                          ),
+                        ],
+                      );
+                    },
+                  ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildWhaleAlertBanner({
+    required String volumeEffettivo,
+    required String volumeNormale,
+    required String sbilanciamento,
+  }) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16.0),
+      padding: const EdgeInsets.all(16.0),
+      decoration: BoxDecoration(
+        color: Colors.red[900],
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.red.withOpacity(0.4),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.warning_amber_rounded, color: Colors.amber, size: 28),
+              SizedBox(width: 8),
+              Text(
+                "WHALE ALERT",
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 1.1,
+                ),
+              ),
+            ],
+          ),
+          const Divider(color: Colors.white24, height: 20),
+          Text(
+            "Flusso: $volumeEffettivo (Media: $volumeNormale)",
+            style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w500),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            "Polarizzazione: $sbilanciamento",
+            style: const TextStyle(color: Colors.amber, fontSize: 13, fontWeight: FontWeight.bold),
+          ),
+        ],
       ),
     );
   }
