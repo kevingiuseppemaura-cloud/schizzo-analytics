@@ -11,10 +11,6 @@ from typing import Optional, List, Dict, Any
 OPENWEATHER_API_KEY = "1276c6c958e9fa1f6d99da6fadb02421"
 
 def ottieni_meteo_live(lat: float, lon: float) -> str:
-    """
-    Interroga OpenWeatherMap tramite latitudine e longitudine dello stadio
-    per ottenere le condizioni meteo attuali in italiano.
-    """
     if not lat or not lon:
         return "Non disponibile"
         
@@ -42,7 +38,7 @@ except ImportError:
         return {"status": "warning", "message": "Modulo esperti temporaneamente non disponibile", "data": []}
 
 # ==========================================
-# 🗄️ DATABASE PROPRIETARI (STADI & ALLENATORI)
+# 🗄️ DATABASE PROPRIETARI (STADI, ALLENATORI & STATS LAMBDA)
 # ==========================================
 DB_STADI = {
     "Inter": {"nome": "Stadio Giuseppe Meazza", "terreno": "Erba Mista", "copertura": "Scoperto", "lat": 45.4781, "lon": 9.1240},
@@ -67,6 +63,31 @@ DB_ALLENATORI = {
     "default": {"nome": "Da aggiornare", "indice": "N/D"}
 }
 
+# 📊 NUOVO: MEDIA GOL ATTESI PER SQUADRA (CASA vs TRASFERTA)
+DB_LAMBDA_SQUADRE = {
+    "Inter": {"lambda_casa": 2.10, "lambda_ospite": 1.75},
+    "Milan": {"lambda_casa": 1.80, "lambda_ospite": 1.40},
+    "Juventus": {"lambda_casa": 1.65, "lambda_ospite": 1.20},
+    "Napoli": {"lambda_casa": 1.85, "lambda_ospite": 1.45},
+    "Roma": {"lambda_casa": 1.70, "lambda_ospite": 1.25},
+    "Lazio": {"lambda_casa": 1.55, "lambda_ospite": 1.15},
+    "Atalanta": {"lambda_casa": 2.00, "lambda_ospite": 1.60},
+    "Fiorentina": {"lambda_casa": 1.50, "lambda_ospite": 1.10},
+    "Bologna": {"lambda_casa": 1.45, "lambda_ospite": 1.05},
+    "Torino": {"lambda_casa": 1.25, "lambda_ospite": 0.90},
+    "Verona": {"lambda_casa": 1.10, "lambda_ospite": 0.85},
+    "Udinese": {"lambda_casa": 1.20, "lambda_ospite": 0.95},
+    "Genoa": {"lambda_casa": 1.15, "lambda_ospite": 0.85},
+    "Monza": {"lambda_casa": 1.10, "lambda_ospite": 0.80},
+    "Cagliari": {"lambda_casa": 1.15, "lambda_ospite": 0.75},
+    "Empoli": {"lambda_casa": 1.00, "lambda_ospite": 0.70},
+    "Lecce": {"lambda_casa": 1.05, "lambda_ospite": 0.70},
+    "Parma": {"lambda_casa": 1.20, "lambda_ospite": 0.90},
+    "Como": {"lambda_casa": 1.10, "lambda_ospite": 0.85},
+    "Venezia": {"lambda_casa": 1.00, "lambda_ospite": 0.75},
+    "default": {"lambda_casa": 1.35, "lambda_ospite": 1.00}
+}
+
 # ==========================================
 # ⚖️ ANAGRAFICA DINAMICA SEVERITÀ ARBITRI
 # ==========================================
@@ -80,15 +101,9 @@ DB_SEVERITA_ARBITRI = {
     "default": "Media (5.0)"
 }
 
-# ==========================================
-# 🕷️ MODULO SCRAPING LIVE ARBITRI
-# ==========================================
 def scrappa_arbitro_live(squadra_casa: str, squadra_ospite: str) -> str:
     return "Daniele Doveri"
 
-# ==========================================
-# 🧩 GESTORE CONTESTO (INTEGRATO)
-# ==========================================
 def genera_contesto_match(casa: str, ospite: str):
     casa_clean = casa.strip().title()
     ospite_clean = ospite.strip().title()
@@ -100,7 +115,6 @@ def genera_contesto_match(casa: str, ospite: str):
     arbitro_designato = scrappa_arbitro_live(casa_clean, ospite_clean)
     severita_arbitro = DB_SEVERITA_ARBITRI.get(arbitro_designato, DB_SEVERITA_ARBITRI.get("default"))
     
-    # Chiamata live con latitudine e longitudine dello stadio
     meteo_live = ottieni_meteo_live(stadio_info.get("lat"), stadio_info.get("lon"))
     
     return {
@@ -121,7 +135,7 @@ def genera_contesto_match(casa: str, ospite: str):
 app = FastAPI(
     title="Schizzo Analytics Engine",
     description="Backend analitico con motore Poisson dinamico e architettura modulare.",
-    version="2.3.0"
+    version="2.3.1"
 )
 
 # ==========================================
@@ -133,8 +147,8 @@ class MatchRequest(BaseModel):
     squadra_ospite: Optional[str] = None
     home: Optional[str] = None
     away: Optional[str] = None
-    lambda_casa: float = 1.45
-    lambda_ospite: float = 1.10
+    lambda_casa: Optional[float] = None
+    lambda_ospite: Optional[float] = None
     moltiplicatore_infortuni: Optional[float] = 1.0
     moltiplicatore_stadio: Optional[float] = 1.0
     moltiplicatore_arbitro: Optional[float] = 1.0
@@ -201,7 +215,7 @@ def read_root():
     return {
         "status": "online",
         "app": "Schizzo Analytics Engine",
-        "version": "2.3.0",
+        "version": "2.3.1",
         "principio": "Costruire, non Sostituire"
     }
 
@@ -212,11 +226,20 @@ def analizza_partita(req: MatchRequest):
     ospite = req.squadra_ospite or req.away or "Trasferta"
     match_id = req.match_id or f"{casa.lower()}_{ospite.lower()}"
 
-    l_casa_adj = req.lambda_casa * req.moltiplicatore_infortuni * req.moltiplicatore_stadio
-    l_ospite_adj = req.lambda_ospite * req.moltiplicatore_arbitro
+    casa_clean = casa.strip().title()
+    ospite_clean = ospite.strip().title()
+
+    # Recupera i lambda specifici della squadra se non inviati manualmente
+    stats_casa = DB_LAMBDA_SQUADRE.get(casa_clean, DB_LAMBDA_SQUADRE["default"])
+    stats_ospite = DB_LAMBDA_SQUADRE.get(ospite_clean, DB_LAMBDA_SQUADRE["default"])
+
+    l_casa_base = req.lambda_casa if req.lambda_casa is not None else stats_casa["lambda_casa"]
+    l_ospite_base = req.lambda_ospite if req.lambda_ospite is not None else stats_ospite["lambda_ospite"]
+
+    l_casa_adj = l_casa_base * req.moltiplicatore_infortuni * req.moltiplicatore_stadio
+    l_ospite_adj = l_ospite_base * req.moltiplicatore_arbitro
     
     risultati_poisson = elabora_mercati_poisson(l_casa_adj, l_ospite_adj)
-    
     contesto_match = genera_contesto_match(casa=casa, ospite=ospite)
     
     dati_esperti = []
