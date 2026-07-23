@@ -31,14 +31,18 @@ class AnalysisCard extends StatelessWidget {
           backgroundColor: themeColor.withOpacity(0.15),
           child: Icon(icon, color: themeColor),
         ),
+        // Expanded previene l'overflow orizzontale del titolo
         title: Row(
           children: [
-            Text(
-              title,
-              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+            Expanded(
+              child: Text(
+                title,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+              ),
             ),
             if (badgeText != null) ...[
-              const SizedBox(width: 8),
+              const SizedBox(width: 6),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                 decoration: BoxDecoration(
@@ -63,41 +67,40 @@ class AnalysisCard extends StatelessWidget {
             child: data.isEmpty
                 ? const Center(
                     child: Text(
-                      "Nessun dato disponibile per questo modulo.",
+                      "Nessun dato disponibile.",
                       style: TextStyle(color: Colors.grey, fontStyle: FontStyle.italic),
                     ),
                   )
                 : Column(
                     children: data.entries.map((entry) {
-                      final double? valueAsNum = double.tryParse(
-                        entry.value.toString().replaceAll('%', '').replaceAll(',', '.'),
-                      );
+                      // Formattazione etichetta (es: esito_1x2 -> ESITO 1X2)
+                      final cleanKey = entry.key.replaceAll('_', ' ').toUpperCase();
 
                       return Padding(
                         padding: const EdgeInsets.symmetric(vertical: 6.0),
                         child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
-                              entry.key,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w500,
-                                fontSize: 14,
+                            // Nome del parametro a sinistra
+                            Expanded(
+                              flex: 2,
+                              child: Text(
+                                cleanKey,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 13,
+                                  color: Colors.black87,
+                                ),
                               ),
                             ),
-                            Row(
-                              children: [
-                                Text(
-                                  entry.value.toString(),
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 14,
-                                    color: (valueAsNum != null && valueAsNum > 60)
-                                        ? Colors.green[700]
-                                        : Colors.black87,
-                                  ),
-                                ),
-                              ],
+                            const SizedBox(width: 8),
+                            // Valore formattato a destra
+                            Expanded(
+                              flex: 3,
+                              child: Align(
+                                alignment: Alignment.centerRight,
+                                child: _buildFormattedValue(entry.value),
+                              ),
                             ),
                           ],
                         ),
@@ -108,5 +111,57 @@ class AnalysisCard extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  // Helper per spezzettare e pulire i dati annidati (Mappe, Liste, Percentuali)
+  Widget _buildFormattedValue(dynamic value) {
+    if (value is Map) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: value.entries.map((e) {
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 2.0),
+            child: Text(
+              "${e.key}: ${e.value}%",
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+            ),
+          );
+        }).toList(),
+      );
+    } else if (value is List) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: value.map((item) {
+          if (item is Map) {
+            final res = item['risultato'] ?? item['esito'] ?? item.toString();
+            final prob = item['probabilita'] ?? item['prob'] ?? '';
+            return Text(
+              "$res ${prob != '' ? '($prob%)' : ''}",
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+            );
+          }
+          return Text(
+            item.toString(),
+            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+          );
+        }).toList(),
+      );
+    } else {
+      final String strVal = value.toString();
+      final double? valueAsNum = double.tryParse(
+        strVal.replaceAll('%', '').replaceAll(',', '.'),
+      );
+
+      return Text(
+        strVal.endsWith('%') || valueAsNum == null ? strVal : "$strVal%",
+        style: TextStyle(
+          fontWeight: FontWeight.bold,
+          fontSize: 14,
+          color: (valueAsNum != null && valueAsNum > 60)
+              ? Colors.orange[800] // Colore arancione per i valori alti
+              : Colors.black87,
+        ),
+      );
+    }
   }
 }
