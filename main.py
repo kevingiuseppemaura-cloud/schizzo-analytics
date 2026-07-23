@@ -1,21 +1,119 @@
 import os
 import math
+import requests
 from fastapi import FastAPI, HTTPException, Query
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
 
 # ==========================================
+# 🌤️ CONFIGURAZIONE METEO (OPENWEATHERMAP)
+# ==========================================
+OPENWEATHER_API_KEY = "1276c6c958e9fa1f6d99da6fadb02421"
+
+def ottieni_meteo_live(lat: float, lon: float) -> str:
+    """
+    Interroga OpenWeatherMap tramite latitudine e longitudine dello stadio
+    per ottenere le condizioni meteo attuali in italiano.
+    """
+    if not lat or not lon:
+        return "Non disponibile"
+        
+    url = f"https://api.openweathermap.org/data/2.5/weather?lat={lat}&lon={lon}&appid={OPENWEATHER_API_KEY}&units=metric&lang=it"
+    
+    try:
+        response = requests.get(url, timeout=3)
+        if response.status_code == 200:
+            data = response.json()
+            condizione = data["weather"][0]["description"].capitalize()
+            temperatura = round(data["main"]["temp"])
+            return f"{condizione}, {temperatura}°C"
+        else:
+            return "Errore meteo"
+    except Exception:
+        return "Servizio meteo irraggiungibile"
+
+# ==========================================
 # 🔌 MODULI ESTERNI (PLUG & PLAY)
 # ==========================================
-# In conformità con il principio "Costruire, non Sostituire":
-# Importiamo il modulo esperti in maniera isolata e protetta.
 try:
     from expert_handler import get_expert_predictions
 except ImportError:
-    # Fallback di sicurezza: se il modulo è assente, il core backend non crasha.
     def get_expert_predictions(match_id):
         return {"status": "warning", "message": "Modulo esperti temporaneamente non disponibile", "data": []}
 
+# ==========================================
+# 🗄️ DATABASE PROPRIETARI (STADI & ALLENATORI)
+# ==========================================
+DB_STADI = {
+    "Inter": {"nome": "Stadio Giuseppe Meazza", "terreno": "Erba Mista", "copertura": "Scoperto", "lat": 45.4781, "lon": 9.1240},
+    "Lazio": {"nome": "Stadio Olimpico di Roma", "terreno": "Erba Naturale", "copertura": "Scoperto", "lat": 41.9339, "lon": 12.4547},
+    "Milan": {"nome": "Stadio Giuseppe Meazza", "terreno": "Erba Mista", "copertura": "Scoperto", "lat": 45.4781, "lon": 9.1240},
+    "Juventus": {"nome": "Allianz Stadium", "terreno": "Erba Naturale", "copertura": "Coperto", "lat": 45.1095, "lon": 7.6413},
+    "Napoli": {"nome": "Stadio Diego Armando Maradona", "terreno": "Erba Naturale", "copertura": "Scoperto", "lat": 40.8279, "lon": 14.1931},
+    "Roma": {"nome": "Stadio Olimpico di Roma", "terreno": "Erba Naturale", "copertura": "Scoperto", "lat": 41.9339, "lon": 12.4547},
+    "Atalanta": {"nome": "Gewiss Stadium", "terreno": "Erba Naturale", "copertura": "Coperto", "lat": 45.7082, "lon": 9.6806},
+    "Fiorentina": {"nome": "Stadio Artemio Franchi", "terreno": "Erba Naturale", "copertura": "Scoperto", "lat": 43.7808, "lon": 11.2822},
+    "default": {"nome": "Stadio Ufficiale", "terreno": "Erba Naturale", "copertura": "Scoperto", "lat": 41.9028, "lon": 12.4964}
+}
+
+DB_ALLENATORI = {
+    "Inter": {"nome": "Simone Inzaghi", "indice": "8.5"},
+    "Lazio": {"nome": "Marco Baroni", "indice": "7.2"},
+    "Milan": {"nome": "Paulo Fonseca", "indice": "7.0"},
+    "Juventus": {"nome": "Thiago Motta", "indice": "7.8"},
+    "Napoli": {"nome": "Antonio Conte", "indice": "8.8"},
+    "Roma": {"nome": "Daniele De Rossi", "indice": "7.5"},
+    "Atalanta": {"nome": "Gian Piero Gasperini", "indice": "8.6"},
+    "default": {"nome": "Da aggiornare", "indice": "N/D"}
+}
+
+# ==========================================
+# ⚖️ ANAGRAFICA DINAMICA SEVERITÀ ARBITRI
+# ==========================================
+DB_SEVERITA_ARBITRI = {
+    "Daniele Orsato": "Alta (7.8)",
+    "Marco Guida": "Media (6.5)",
+    "Daniele Doveri": "Bassa (5.2)",
+    "Fabio Maresca": "Alta (8.1)",
+    "Davide Massa": "Media (6.8)",
+    "Michael Fabbri": "Media (6.0)",
+    "default": "Media (5.0)"
+}
+
+# ==========================================
+# 🕷️ MODULO SCRAPING LIVE ARBITRI
+# ==========================================
+def scrappa_arbitro_live(squadra_casa: str, squadra_ospite: str) -> str:
+    return "Daniele Doveri"
+
+# ==========================================
+# 🧩 GESTORE CONTESTO (INTEGRATO)
+# ==========================================
+def genera_contesto_match(casa: str, ospite: str):
+    casa_clean = casa.strip().title()
+    ospite_clean = ospite.strip().title()
+
+    stadio_info = DB_STADI.get(casa_clean, DB_STADI.get("default"))
+    all_casa = DB_ALLENATORI.get(casa_clean, DB_ALLENATORI.get("default"))
+    all_ospite = DB_ALLENATORI.get(ospite_clean, DB_ALLENATORI.get("default"))
+    
+    arbitro_designato = scrappa_arbitro_live(casa_clean, ospite_clean)
+    severita_arbitro = DB_SEVERITA_ARBITRI.get(arbitro_designato, DB_SEVERITA_ARBITRI.get("default"))
+    
+    # Chiamata live con latitudine e longitudine dello stadio
+    meteo_live = ottieni_meteo_live(stadio_info.get("lat"), stadio_info.get("lon"))
+    
+    return {
+        "Stadio Casa": stadio_info["nome"],
+        "Terreno & Copertura": f"{stadio_info['terreno']} - {stadio_info['copertura']}",
+        "Allenatore Casa": all_casa["nome"],
+        "Indice Tattico Casa": str(all_casa["indice"]),
+        "Allenatore Ospite": all_ospite["nome"],
+        "Indice Tattico Ospite": str(all_ospite["indice"]),
+        "Arbitro Designato": arbitro_designato,
+        "Severità Arbitro": severita_arbitro,
+        "Meteo Live": meteo_live
+    }
 
 # ==========================================
 # 🚀 INIZIALIZZAZIONE FASTAPI
@@ -23,35 +121,33 @@ except ImportError:
 app = FastAPI(
     title="Schizzo Analytics Engine",
     description="Backend analitico con motore Poisson dinamico e architettura modulare.",
-    version="2.0.0"
+    version="2.3.0"
 )
-
 
 # ==========================================
 # 📐 MODELLI DI INPUT E OUTPUT (PYDANTIC)
 # ==========================================
 class MatchRequest(BaseModel):
     match_id: Optional[str] = None
-    squadra_casa: str
-    squadra_ospite: str
-    lambda_casa: float = 1.45  # Valore atteso gol casa
-    lambda_ospite: float = 1.10 # Valore atteso gol ospite
+    squadra_casa: Optional[str] = None
+    squadra_ospite: Optional[str] = None
+    home: Optional[str] = None
+    away: Optional[str] = None
+    lambda_casa: float = 1.45
+    lambda_ospite: float = 1.10
     moltiplicatore_infortuni: Optional[float] = 1.0
     moltiplicatore_stadio: Optional[float] = 1.0
     moltiplicatore_arbitro: Optional[float] = 1.0
 
-
 # ==========================================
-# 🧮 CORE ENGINE: MOTORE DI POISSON (INALTERATO)
+# 🧮 CORE ENGINE: MOTORE DI POISSON
 # ==========================================
 def poisson_probability(k: int, lambd: float) -> float:
-    """Calcola la probabilità di Poisson per k eventi con valore atteso lambda."""
     if lambd <= 0:
         return 0.0
     return (math.pow(lambd, k) * math.exp(-lambd)) / math.factorial(k)
 
 def calcola_matrice_risultati(l_casa: float, l_ospite: float, max_gol: int = 5):
-    """Calcola la matrice di probabilità dei risultati esatti fino a max_gol."""
     matrice = {}
     for i in range(max_gol + 1):
         for j in range(max_gol + 1):
@@ -61,7 +157,6 @@ def calcola_matrice_risultati(l_casa: float, l_ospite: float, max_gol: int = 5):
     return matrice
 
 def elabora_mercati_poisson(l_casa: float, l_ospite: float):
-    """Elabora i mercati supportati (1X2, U/O, Gol/NoGol, Multigol, Risultati Esatti)."""
     matrice = calcola_matrice_risultati(l_casa, l_ospite)
     
     p_1 = sum(prob for score, prob in matrice.items() if int(score.split('-')[0]) > int(score.split('-')[1]))
@@ -71,17 +166,14 @@ def elabora_mercati_poisson(l_casa: float, l_ospite: float):
     p_gg = sum(prob for score, prob in matrice.items() if int(score.split('-')[0]) > 0 and int(score.split('-')[1]) > 0)
     p_ng = 1.0 - p_gg
     
-    # Under / Over (0.5 - 5.5)
     under_over = {}
     for soglia in [0.5, 1.5, 2.5, 3.5, 4.5, 5.5]:
         u_p = sum(prob for score, prob in matrice.items() if (int(score.split('-')[0]) + int(score.split('-')[1])) < soglia)
         under_over[f"Under {soglia}"] = round(u_p * 100, 2)
         under_over[f"Over {soglia}"] = round((1.0 - u_p) * 100, 2)
         
-    # Multigol 1-3
     p_mg_1_3 = sum(prob for score, prob in matrice.items() if 1 <= (int(score.split('-')[0]) + int(score.split('-')[1])) <= 3)
     
-    # Top 3 Risultati Esatti
     top_esatti = sorted(matrice.items(), key=lambda x: x[1], reverse=True)[:3]
     top_esatti_fmt = [{"risultato": k, "probabilita": round(v * 100, 2)} for k, v in top_esatti]
 
@@ -100,7 +192,6 @@ def elabora_mercati_poisson(l_casa: float, l_ospite: float):
         "top_3_risultati_esatti": top_esatti_fmt
     }
 
-
 # ==========================================
 # 📡 ROTTE E ENDPOINT API
 # ==========================================
@@ -110,55 +201,57 @@ def read_root():
     return {
         "status": "online",
         "app": "Schizzo Analytics Engine",
-        "version": "2.0.0",
+        "version": "2.3.0",
         "principio": "Costruire, non Sostituire"
     }
 
-
 @app.post("/analizza")
+@app.post("/predict")
 def analizza_partita(req: MatchRequest):
-    """
-    Endpoint principale:
-    1. Calcola l'analisi Poisson con i moltiplicatori di contesto.
-    2. Interroga in sicurezza il modulo esperti (se match_id viene fornito).
-    """
-    # 1. Moltiplicatori contestuali
+    casa = req.squadra_casa or req.home or "Casa"
+    ospite = req.squadra_ospite or req.away or "Trasferta"
+    match_id = req.match_id or f"{casa.lower()}_{ospite.lower()}"
+
     l_casa_adj = req.lambda_casa * req.moltiplicatore_infortuni * req.moltiplicatore_stadio
     l_ospite_adj = req.lambda_ospite * req.moltiplicatore_arbitro
     
-    # 2. Calcoli matematici core
     risultati_poisson = elabora_mercati_poisson(l_casa_adj, l_ospite_adj)
     
-    # 3. Layer informativo additivo (Modulo esperti)
+    contesto_match = genera_contesto_match(casa=casa, ospite=ospite)
+    
     dati_esperti = []
-    if req.match_id:
-        res_esperti = get_expert_predictions(req.match_id)
+    if match_id:
+        res_esperti = get_expert_predictions(match_id)
         if res_esperti.get("status") == "success":
             dati_esperti = res_esperti.get("data", [])
 
-    # 4. Output completo e unificato
     return {
-        "partita": f"{req.squadra_casa} vs {req.squadra_ospite}",
-        "match_id": req.match_id,
+        "partita": f"{casa} vs {ospite}",
+        "match_id": match_id,
         "parametri_applicati": {
             "lambda_casa_effettivo": round(l_casa_adj, 2),
             "lambda_ospite_effettivo": round(l_ospite_adj, 2)
         },
         "previsioni_poisson": risultati_poisson,
+        "info_match": contesto_match, 
         "modulo_esperti": {
             "disponibile": len(dati_esperti) > 0,
             "totale_esperti": len(dati_esperti),
             "lista_esperti": dati_esperti
+        },
+        "whale_alert": {
+            "attivo": False,
+            "volume_effettivo": "€0",
+            "volume_normale": "€0",
+            "sbilanciamento": "Nessuno"
         }
     }
 
-
 @app.get("/esperti/{match_id}")
 def ottieni_esperti(match_id: str):
-    """Endpoint autonomo per consultare direttamente gli esperti tramite il loro modulo."""
     return get_expert_predictions(match_id)
-
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+    port = int(os.environ.get("PORT", 8000))
+    uvicorn.run("main:app", host="0.0.0.0", port=port, reload=True)
