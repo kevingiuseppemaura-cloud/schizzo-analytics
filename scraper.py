@@ -1,43 +1,58 @@
 import requests
-import time
-import random
 from bs4 import BeautifulSoup
-from cachetools import TTLCache
 
-# Cache configurata per scadere dopo 15 minuti (900 secondi)
-# Memorizza fino a 50 match contemporaneamente
-cache_quote = TTLCache(maxsize=50, ttl=900)
-
-def get_quote_flashscore(match_id):
-    # 1. Controllo immediato in cache
-    if match_id in cache_quote:
-        return cache_quote[match_id]
-    
-    # 2. Rate Limiting: attesa casuale tra 1 e 3 secondi per sembrare "umano"
-    time.sleep(random.uniform(1.0, 3.0))
-    
-    url = f"https://www.flashscore.it/partita/{match_id}/#/quote/quota-finale/1x2"
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-    }
-    
+def estrai_arbitro(url_o_match_data):
+    """
+    Esegue lo scraping per rilevare l'arbitro designato per la partita.
+    Restituisce il nome dell'arbitro oppure 'ND' se non ancora designato o non trovato.
+    """
     try:
-        response = requests.get(url, headers=headers, timeout=10)
+        # Richiesta HTTP alla pagina del match monitorata
+        headers = {"User-Agent": "Mozilla/5.0"}
+        response = requests.get(url_o_match_data, headers=headers, timeout=5)
+        
         if response.status_code != 200:
-            return 1.90 # Fallback in caso di errore server
+            return "ND"
             
         soup = BeautifulSoup(response.text, 'html.parser')
         
-        # LOGICA DI ESTRAZIONE (Personalizzabile)
-        # Qui punteremo a un elemento placeholder, poi lo raffineremo in base alla struttura HTML di Flashscore
-        quota_elemento = soup.find("span", {"class": "odds-value"})
+        # Selettore del campo arbitro (adattabile alla struttura HTML di riferimento)
+        elemento_arbitro = soup.find("span", {"id": "match-referee"})
         
-        quota = float(quota_elemento.text.replace(',', '.')) if quota_elemento else 1.90
+        if not elemento_arbitro:
+            return "ND"
+            
+        nome_arbitro = elemento_arbitro.get_text(strip=True)
         
-        # 3. Salva in cache
-        cache_quote[match_id] = quota
-        return quota
+        # Validazione della stringa estratta
+        if not nome_arbitro or "da definire" in nome_arbitro.lower() or "nd" == nome_arbitro.lower():
+            return "ND"
+            
+        return nome_arbitro
         
-    except Exception as e:
-        print(f"Errore scraping per {match_id}: {e}")
-        return 1.90
+    except Exception:
+        # Fallback di sicurezza in caso di eccezioni di rete o parsing
+        return "ND"
+
+def process_arbitro_per_calcolo(url_match, database_arbitri):
+    """
+    Funzione di raccordo che gestisce lo scraping e l'interrogazione del database:
+    1. Cerca l'arbitro tramite scraping.
+    2. Se restituisce 'ND', assegna il moltiplicatore neutro (1.0) senza influire su Poisson.
+    3. Se trovato, preleva l'indice di severità dal database degli arbitri.
+    """
+    nome_arbitro = estrai_arbitro(url_match)
+    
+    if nome_arbitro == "ND" or not nome_arbitro:
+        return {
+            "arbitro": "ND",
+            "moltiplicatore_arbitro": 1.0  # Valore neutro per preservare la precisione di Poisson
+        }
+    
+    # Interrogazione del database arbitri (restituisce 1.0 di default se non censito)
+    indice_severita = database_arbitri.get(nome_arbitro, 1.0)
+    
+    return {
+        "arbitro": nome_arbitro,
+        "moltiplicatore_arbitro": indice_severita
+    }
