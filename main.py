@@ -1,5 +1,7 @@
 import os
 import math
+import time
+from functools import wraps
 import requests
 from fastapi import FastAPI, HTTPException, Query
 from pydantic import BaseModel
@@ -7,10 +9,31 @@ from typing import Optional, List, Dict, Any
 from bs4 import BeautifulSoup
 
 # ==========================================
+# ⏱️ SISTEMA DI CACHE INTELLIGENTE (60s TTL)
+# ==========================================
+def timed_cache(seconds: int = 60):
+    def decorator(func):
+        cache = {}
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            key = (args, tuple(sorted(kwargs.items())))
+            now = time.time()
+            if key in cache:
+                result, timestamp = cache[key]
+                if now - timestamp < seconds:
+                    return result
+            result = func(*args, **kwargs)
+            cache[key] = (result, now)
+            return result
+        return wrapper
+    return decorator
+
+# ==========================================
 # 🌤️ CONFIGURAZIONE METEO (OPENWEATHERMAP)
 # ==========================================
 OPENWEATHER_API_KEY = os.environ.get("OPENWEATHER_API_KEY", "1276c6c958e9fa1f6d99da6fadb02421")
 
+@timed_cache(seconds=60)
 def ottieni_meteo_live(lat: float, lon: float) -> str:
     if not lat or not lon:
         return "Non disponibile"
@@ -311,7 +334,6 @@ DB_ALLENATORI = {
     "verona": {"allenatore": "Marco Baroni", "indice_tattico": 5},
     "vicenza": {"allenatore": "Fabio Gallo", "indice_tattico": 5},
 
-
     # --- PREMIER LEAGUE ---
     "arsenal": {"allenatore": "Mikel Arteta", "indice_tattico": 8},
     "aston villa": {"allenatore": "Unai Emery", "indice_tattico": 9},
@@ -334,8 +356,7 @@ DB_ALLENATORI = {
     "west ham": {"allenatore": "Julen Lopetegui", "indice_tattico": 5},
     "wolverhampton": {"allenatore": "Gary O'Neil", "indice_tattico": 5},
 
-
-     # --- BUNDESLIGA ---
+    # --- BUNDESLIGA ---
     "stoccarda": {"allenatore": "Sebastian Hoeneß", "indice_tattico": 9},
     "bayern monaco": {"allenatore": "Vincent Kompany", "indice_tattico": 9},
     "friburgo": {"allenatore": "Julian Schuster", "indice_tattico": 6},
@@ -354,8 +375,6 @@ DB_ALLENATORI = {
     "union berlino": {"allenatore": "Mauro Lustrinelli", "indice_tattico": 4},
     "eintracht francoforte": {"allenatore": "Adi Hütter", "indice_tattico": 8},
     "bayer leverkusen": {"allenatore": "Carles Martínez", "indice_tattico": 8},
-
-
 
     # --- LA LIGA ---
     "real madrid": {"allenatore": "Carlo Ancelotti", "indice_tattico": 6},
@@ -378,7 +397,6 @@ DB_ALLENATORI = {
     "almeria": {"allenatore": "Xavi García Pimienta", "indice_tattico": 7},
     "granada": {"allenatore": "Pacheta", "indice_tattico": 6},
     "cadice": {"allenatore": "Imanol Idiakez", "indice_tattico": 5},
-
 
     # --- LIGUE 1 ---
     "paris saint-germain": {"allenatore": "Luis Enrique", "indice_tattico": 9},
@@ -524,23 +542,22 @@ DB_ARBITRI = {
 # ==========================================
 # 🔍 FUNZIONE SCRAPING ARBITRO LIVE & ND
 # ==========================================
+@timed_cache(seconds=60)
 def scrappa_arbitro_live(squadra_casa: str, squadra_ospite: str) -> str:
     """
     Esegue lo scraping web per rilevare l'arbitro ufficiale designato per il match.
+    Protetto da cache intelligente a 60 secondi.
     Se la designazione non è ancora disponibile o in caso di assenza/errore, restituisce tassativamente 'ND'.
     """
     try:
-        # Esempio di richiesta di scraping protetta per la ricerca della designazione ufficiale
         url_ricerca = f"https://www.google.com/search?q=arbitro+designato+{squadra_casa}+{squadra_ospite}"
         headers = {"User-Agent": "Mozilla/5.0"}
         response = requests.get(url_ricerca, headers=headers, timeout=3)
         
         if response.status_code == 200:
             soup = BeautifulSoup(response.text, 'html.parser')
-            # Logica di validazione: se l'arbitro non è ufficializzato nei flussi live, restituisce "ND"
             pass
             
-        # Fallback sicuro a "ND" se non viene trovata alcuna designazione ufficiale confermata
         return "ND"
     except Exception:
         return "ND"
@@ -583,7 +600,7 @@ def genera_contesto_match(casa: str, ospite: str):
 app = FastAPI(
     title="Schizzo Analytics Engine",
     description="Backend analitico con motore Poisson dinamico e architettura modulare.",
-    version="2.3.1"
+    version="2.3.2"
 )
 
 # ==========================================
@@ -663,7 +680,7 @@ def read_root():
     return {
         "status": "online",
         "app": "Schizzo Analytics Engine",
-        "version": "2.3.1",
+        "version": "2.3.2",
         "principio": "Costruire, non Sostituire"
     }
 
@@ -725,34 +742,6 @@ def analizza_partita(req: MatchRequest):
         "whale_alert": {
             "attivo": False,
             "volume_effettivo": "€0",
-            "volume_normale": "€0",
-            "sbilanciamento": "Nessuno"
+            "volume_normale": "€0"
         }
     }
-
-@app.get("/esperti/{match_id}")
-def ottieni_esperti(match_id: str):
-    return get_expert_predictions(match_id)
-
-# ==========================================
-# 🧪 TEST LOCALE ED ESECUZIONE SERVER
-# ==========================================
-if __name__ == "__main__":
-    import uvicorn
-    
-    print("=" * 60)
-    print("🧪 ESECUZIONE TEST DI VALIDAZIONE INTERNA")
-    print("=" * 60)
-    
-    test_req = MatchRequest(squadra_casa="Frosinone", squadra_ospite="Juve Stabia")
-    test_res = analizza_partita(test_req)
-    
-    print(f"Match: {test_res['partita']}")
-    print(f"Arbitro Rilevato: {test_res['parametri_applicati']['arbitro_rilevato']}")
-    print(f"Moltiplicatore Arbitro: {test_res['parametri_applicati']['moltiplicatore_arbitro_applicato']}")
-    print(f"Esito 1X2 Stimato: {test_res['previsioni_poisson']['esito_1x2']}")
-    print("=" * 60)
-    print("🚀 AVVIO UVI_SERVER...")
-    
-    port = int(os.environ.get("PORT", 8000))
-    uvicorn.run("main:app", host="0.0.0.0", port=port, reload=True)
