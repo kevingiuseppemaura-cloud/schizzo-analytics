@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'dart:async';
-import 'widgets/team_search_input.dart';
 import 'widgets/analysis_card.dart';
 
 void main() => runApp(const SchizzoApp());
@@ -42,11 +41,31 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Future<Map<String, dynamic>>? _dashboardFuture;
   bool _haAnalizzato = false;
 
-  final List<String> squadreDisponibili = [
-    'Atalanta', 'Bologna', 'Cagliari', 'Como', 'Cremonese', 'Empoli', 'Fiorentina',
-    'Frosinone', 'Genoa', 'Inter', 'Juventus', 'Lazio', 'Lecce', 'Mantova',
-    'Milan', 'Modena', 'Monza', 'Napoli', 'Palermo', 'Parma', 'Pisa', 'Roma',
-    'Salernitana', 'Sampdoria', 'Sassuolo', 'Sudtirol', 'Torino', 'Udinese', 'Venezia', 'Verona'
+  // Database globale esteso di squadre per tutti i principali campionati e tornei
+  final List<String> squadreGlobali = [
+    // Serie A
+    'Atalanta', 'Bologna', 'Cagliari', 'Como', 'Empoli', 'Fiorentina', 'Genoa', 
+    'Inter', 'Juventus', 'Lazio', 'Lecce', 'Milan', 'Monza', 'Napoli', 
+    'Parma', 'Roma', 'Torino', 'Udinese', 'Venezia', 'Verona',
+    // Serie B
+    'Bari', 'Brescia', 'Catanzaro', 'Cesena', 'Cittadella', 'Cosenza', 'Cremonese', 
+    'Frosinone', 'Mantova', 'Modena', 'Palermo', 'Pisa', 'Reggiana', 'Sampdoria', 
+    'Sassuolo', 'Spezia', 'Sudtirol', 'Ternana',
+    // Premier League
+    'Arsenal', 'Aston Villa', 'Bournemouth', 'Brentford', 'Brighton', 'Chelsea', 
+    'Crystal Palace', 'Everton', 'Fulham', 'Liverpool', 'Manchester City', 
+    'Manchester United', 'Newcastle United', 'Nottingham Forest', 'Tottenham Hotspur', 
+    'West Ham United', 'Wolverhampton',
+    // La Liga
+    'Atletico Madrid', 'Barcelona', 'Athletic Club', 'Girona', 'Real Madrid', 
+    'Real Sociedad', 'Real Betis', 'Villarreal', 'Valencia', 'Sevilla',
+    // Bundesliga
+    'Bayer Leverkusen', 'Bayern Munich', 'Borussia Dortmund', 'Eintracht Frankfurt', 
+    'RB Leipzig', 'Stuttgart', 'Werder Bremen',
+    // Ligue 1
+    'AS Monaco', 'Lille', 'Lyon', 'Marseille', 'Nice', 'Paris Saint-Germain', 'Rennes',
+    // Internazionali / Sud America
+    'Boca Juniors', 'River Plate', 'Flamengo', 'Palmeiras'
   ];
 
   void _eseguiAnalisi() {
@@ -70,7 +89,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Future<Map<String, dynamic>> fetchDashboardData() async {
     const String baseUrl = 'https://schizzo-analytics.onrender.com';
-    final String internalMatchId = "${homeTeam.toLowerCase()}_${awayTeam.toLowerCase()}";
+    final String internalMatchId = "${homeTeam.toLowerCase().replaceAll(' ', '_')}_${awayTeam.toLowerCase().replaceAll(' ', '_')}";
     const int timeoutSeconds = 60;
 
     try {
@@ -97,7 +116,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       }
 
       if (statsResponse.statusCode != 200) {
-        throw Exception('Errore nel recupero dati statistiche (Codice: ${statsResponse.statusCode})');
+        throw Exception('Partita non trovata o errore server (Codice: ${statsResponse.statusCode})');
       }
 
       final expertsResponse = await http.get(
@@ -127,13 +146,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
         infoContext = Map<String, dynamic>.from(statsData['contesto']);
       } else {
         infoContext = {
-          "Stadio Casa": "In attesa di lettura DB stadi",
-          "Terreno & Copertura": "Naturale/Sintetico - Coperto/Scoperto (Da DB)",
-          "Allenatore Casa": "Dato da DB Allenatori",
-          "Allenatore Ospite": "Dato da DB Allenatori",
-          "Arbitro Designato": "In attesa di designazione",
-          "Severità Arbitro": "Da 1 a 10 (Da DB Arbitri)",
-          "Meteo Live": "In attesa dati",
+          "Stadio Casa": "Dato non disponibile",
+          "Terreno & Copertura": "N/D",
+          "Allenatore Casa": "N/D",
+          "Allenatore Ospite": "N/D",
+          "Arbitro Designato": "In attesa",
         };
       }
 
@@ -198,7 +215,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Text(
-                      "Seleziona Partita",
+                      "Seleziona Partita (Database Globale)",
                       style: TextStyle(
                         fontSize: 18, 
                         fontWeight: FontWeight.bold,
@@ -207,20 +224,66 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     ),
                     const SizedBox(height: 16),
                     
-                    TeamSearchInput(
-                      label: "Squadra Casa",
-                      availableTeams: squadreDisponibili,
-                      onTeamSelected: (selected) {
-                        setState(() { homeTeam = selected; });
+                    // Autocompletamento Squadra Casa
+                    Autocomplete<String>(
+                      optionsBuilder: (TextEditingValue textEditingValue) {
+                        if (textEditingValue.text.isEmpty) {
+                          return const Iterable<String>.empty();
+                        }
+                        return squadreGlobali.where((String option) {
+                          return option.toLowerCase().contains(textEditingValue.text.toLowerCase());
+                        });
+                      },
+                      onSelected: (String selection) {
+                        setState(() { homeTeam = selection; });
+                      },
+                      fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
+                        return TextField(
+                          controller: controller,
+                          focusNode: focusNode,
+                          decoration: InputDecoration(
+                            labelText: "Squadra Casa",
+                            prefixIcon: const Icon(Icons.sports_soccer, color: Color(0xFF1E3A8A)),
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                            filled: true,
+                            fillColor: Colors.white,
+                          ),
+                          onChanged: (value) {
+                            setState(() { homeTeam = value; });
+                          },
+                        );
                       },
                     ),
                     const SizedBox(height: 12),
 
-                    TeamSearchInput(
-                      label: "Squadra Trasferta",
-                      availableTeams: squadreDisponibili,
-                      onTeamSelected: (selected) {
-                        setState(() { awayTeam = selected; });
+                    // Autocompletamento Squadra Trasferta
+                    Autocomplete<String>(
+                      optionsBuilder: (TextEditingValue textEditingValue) {
+                        if (textEditingValue.text.isEmpty) {
+                          return const Iterable<String>.empty();
+                        }
+                        return squadreGlobali.where((String option) {
+                          return option.toLowerCase().contains(textEditingValue.text.toLowerCase());
+                        });
+                      },
+                      onSelected: (String selection) {
+                        setState(() { awayTeam = selection; });
+                      },
+                      fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
+                        return TextField(
+                          controller: controller,
+                          focusNode: focusNode,
+                          decoration: InputDecoration(
+                            labelText: "Squadra Trasferta",
+                            prefixIcon: const Icon(Icons.sports_soccer, color: Color(0xFFFF6B00)),
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                            filled: true,
+                            fillColor: Colors.white,
+                          ),
+                          onChanged: (value) {
+                            setState(() { awayTeam = value; });
+                          },
+                        );
                       },
                     ),
                     const SizedBox(height: 16),
@@ -257,7 +320,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           Icon(Icons.analytics_outlined, size: 48, color: Colors.grey),
                           SizedBox(height: 12),
                           Text(
-                            "Seleziona le squadre e premi 'ANALIZZA PARTITA' per avviare il calcolo.",
+                            "Digita qualsiasi squadra (es. Juventus, Real Madrid, Bayern, Boca Juniors) per aprire la tendina e avviare l'analisi.",
                             textAlign: TextAlign.center,
                             style: TextStyle(color: Colors.grey, fontSize: 14),
                           ),
@@ -282,6 +345,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             child: Text(
                               "Errore: ${snapshot.error}",
                               style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+                              textAlign: TextAlign.center,
                             ),
                           ),
                         );
