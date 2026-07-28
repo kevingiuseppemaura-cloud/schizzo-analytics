@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'dart:async';
 import 'widgets/team_search_input.dart';
 import 'widgets/analysis_card.dart';
 
@@ -68,38 +69,48 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Future<Map<String, dynamic>> fetchDashboardData() async {
-    final String baseUrl = 'https://schizzo-analytics.onrender.com';
+    const String baseUrl = 'https://schizzo-analytics.onrender.com';
     final String internalMatchId = "${homeTeam.toLowerCase()}_${awayTeam.toLowerCase()}";
+    const int timeoutSeconds = 60;
 
-    http.Response statsResponse = await http.post(
-      Uri.parse('$baseUrl/analizza'),
-      headers: {"Content-Type": "application/json"},
-      body: json.encode({
-        "match_id": internalMatchId,
-        "squadra_casa": homeTeam,
-        "squadra_ospite": awayTeam,
-      }),
-    );
-
-    if (statsResponse.statusCode != 200) {
-      statsResponse = await http.post(
-        Uri.parse('$baseUrl/predict'),
+    try {
+      http.Response statsResponse = await http.post(
+        Uri.parse('$baseUrl/analizza'),
         headers: {"Content-Type": "application/json"},
         body: json.encode({
           "match_id": internalMatchId,
-          "home": homeTeam,
-          "away": awayTeam,
+          "squadra_casa": homeTeam,
+          "squadra_ospite": awayTeam,
         }),
-      );
-    }
+      ).timeout(const Duration(seconds: timeoutSeconds));
 
-    final expertsResponse = await http.get(
-      Uri.parse('$baseUrl/esperti/$internalMatchId'),
-    );
+      if (statsResponse.statusCode != 200) {
+        statsResponse = await http.post(
+          Uri.parse('$baseUrl/predict'),
+          headers: {"Content-Type": "application/json"},
+          body: json.encode({
+            "match_id": internalMatchId,
+            "home": homeTeam,
+            "away": awayTeam,
+          }),
+        ).timeout(const Duration(seconds: timeoutSeconds));
+      }
 
-    if (statsResponse.statusCode == 200) {
-      final statsData = json.decode(statsResponse.body);
+      if (statsResponse.statusCode != 200) {
+        throw Exception('Errore nel recupero dati statistiche (Codice: ${statsResponse.statusCode})');
+      }
+
+      final expertsResponse = await http.get(
+        Uri.parse('$baseUrl/esperti/$internalMatchId'),
+      ).timeout(const Duration(seconds: timeoutSeconds));
+
+      final statsDataDecoded = json.decode(statsResponse.body);
       
+      if (statsDataDecoded is! Map<String, dynamic>) {
+        throw Exception('Formato dati statistiche non valido ricevuto dal server.');
+      }
+      final statsData = statsDataDecoded;
+
       Map<String, dynamic> stats = {};
       if (statsData.containsKey('previsioni_poisson')) {
         stats = Map<String, dynamic>.from(statsData['previsioni_poisson']);
@@ -107,16 +118,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
         stats = Map<String, dynamic>.from(statsData['risultato']);
       } else {
         stats = statsData;
-      }
-
-      Map<String, dynamic> experts = {};
-      if (expertsResponse.statusCode == 200) {
-        final expertsData = json.decode(expertsResponse.body);
-        if (expertsData is Map<String, dynamic> && expertsData.containsKey('modulo_esperti')) {
-          experts = Map<String, dynamic>.from(expertsData['modulo_esperti']);
-        } else if (expertsData is Map<String, dynamic> && expertsData.containsKey('esperti')) {
-          experts = Map<String, dynamic>.from(expertsData['esperti']);
-        }
       }
 
       Map<String, dynamic> infoContext = {};
@@ -132,7 +133,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           "Allenatore Ospite": "Dato da DB Allenatori",
           "Arbitro Designato": "In attesa di designazione",
           "Severità Arbitro": "Da 1 a 10 (Da DB Arbitri)",
-          "Meteo Live": "OpenWeatherMap (Lat/Lon)",
+          "Meteo Live": "In attesa dati",
         };
       }
 
@@ -141,14 +142,27 @@ class _DashboardScreenState extends State<DashboardScreen> {
         whaleData = Map<String, dynamic>.from(statsData['whale_alert']);
       }
 
+      Map<String, dynamic> experts = {};
+      if (expertsResponse.statusCode == 200) {
+        final expertsData = json.decode(expertsResponse.body);
+        if (expertsData is Map<String, dynamic>) {
+          if (expertsData.containsKey('modulo_esperti')) {
+            experts = Map<String, dynamic>.from(expertsData['modulo_esperti']);
+          } else if (expertsData.containsKey('esperti')) {
+            experts = Map<String, dynamic>.from(expertsData['esperti']);
+          }
+        }
+      }
+
       return {
         "stats": stats,
         "experts": experts,
         "info_match": infoContext,
         "whale_alert": whaleData,
       };
-    } else {
-      throw Exception('Errore nel recupero dati: ${statsResponse.statusCode}');
+
+    } on Exception catch (e) {
+      throw Exception('Problema di connessione: $e');
     }
   }
 
