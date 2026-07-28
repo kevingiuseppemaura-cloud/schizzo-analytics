@@ -42,6 +42,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Future<Map<String, dynamic>>? _dashboardFuture;
   bool _haAnalizzato = false;
 
+  // Database globale con tutte le squadre aggiornate
   final List<String> squadreGlobali = [
     // Serie A
     'Atalanta', 'Bologna', 'Cagliari', 'Como', 'Empoli', 'Fiorentina', 'Genoa', 
@@ -53,17 +54,24 @@ class _DashboardScreenState extends State<DashboardScreen> {
     'Sassuolo', 'Spezia', 'Sudtirol', 'Ternana',
     // Premier League
     'Arsenal', 'Aston Villa', 'Bournemouth', 'Brentford', 'Brighton', 'Chelsea', 
-    'Crystal Palace', 'Everton', 'Fulham', 'Liverpool', 'Manchester City', 
-    'Manchester United', 'Newcastle United', 'Nottingham Forest', 'Tottenham Hotspur', 
-    'West Ham United', 'Wolverhampton',
+    'Coventry City', 'Crystal Palace', 'Everton', 'Fulham', 'Hull City', 
+    'Ipswich Town', 'Leeds United', 'Liverpool', 'Manchester City', 
+    'Manchester United', 'Newcastle United', 'Nottingham Forest', 'Sunderland', 'Tottenham',
     // La Liga
-    'Atletico Madrid', 'Barcelona', 'Athletic Club', 'Girona', 'Real Madrid', 
-    'Real Sociedad', 'Real Betis', 'Villarreal', 'Valencia', 'Sevilla',
-    // Bundesliga
-    'Bayer Leverkusen', 'Bayern Munich', 'Borussia Dortmund', 'Eintracht Frankfurt', 
-    'RB Leipzig', 'Stuttgart', 'Werder Bremen',
+    'Alavés', 'Athletic Bilbao', 'Atlético Madrid', 'Barcellona', 'Betis', 
+    'Celta Vigo', 'Deportivo La Coruña', 'Elche', 'Espanyol', 'Getafe', 
+    'Levante', 'Malaga', 'Osasuna', 'Racing Santander', 'Rayo Vallecano', 
+    'Real Madrid', 'Real Sociedad', 'Siviglia', 'Valencia', 'Villarreal',
+    // Bundesliga (Aggiornata con i dati ufficiali)
+    'Amburgo', 'Augusta', 'Bayer Leverkusen', 'Bayern Monaco', 'Borussia Dortmund', 
+    'Borussia M\'gladbach', 'Colonia', 'Eintracht Francoforte', 'Elversberg', 'Friburgo', 
+    'Hoffenheim', 'Magonza', 'Paderborn', 'RB Lipsia', 'Schalke 04', 'Stoccarda', 
+    'Union Berlino', 'Werder Brema',
     // Ligue 1
-    'AS Monaco', 'Lille', 'Lyon', 'Marseille', 'Nice', 'Paris Saint-Germain', 'Rennes',
+    'Paris Saint-Germain', 'Strasburgo', 'Monaco', 'Lilla', 'Rennes', 
+    'Olympique Lione', 'Olympique Marsiglia', 'Lens', 'Paris FC', 'Tolosa', 
+    'Nizza', 'Auxerre', 'Lorient', 'Angers', 'Brest', 'Le Havre', 
+    'Troyes', 'Le Mans FC',
     // Internazionali / Sud America
     'Boca Juniors', 'River Plate', 'Flamengo', 'Palmeiras'
   ];
@@ -325,7 +333,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       onTap: () => _selezionaData(context),
                       borderRadius: BorderRadius.circular(10),
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 15),
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
                         decoration: BoxDecoration(
                           color: Colors.white,
                           borderRadius: BorderRadius.circular(10),
@@ -334,25 +342,31 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Row(
-                              children: [
-                                const Icon(Icons.calendar_today, color: Color(0xFF1E3A8A)),
-                                const SizedBox(width: 12),
-                                Text(
-                                  "Data Partita: $dataFormattataGrafica",
-                                  style: const TextStyle(
-                                    fontSize: 15,
-                                    fontWeight: FontWeight.w500,
-                                    color: Colors.black87,
+                            Expanded(
+                              child: Row(
+                                children: [
+                                  const Icon(Icons.calendar_today, color: Color(0xFF1E3A8A), size: 20),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      "Data: $dataFormattataGrafica",
+                                      style: const TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w500,
+                                        color: Colors.black87,
+                                      ),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
                                   ),
-                                ),
-                              ],
+                                ],
+                              ),
                             ),
                             const Text(
                               "Cambia",
                               style: TextStyle(
                                 color: Color(0xFFFF6B00),
                                 fontWeight: FontWeight.bold,
+                                fontSize: 14,
                               ),
                             ),
                           ],
