@@ -37,11 +37,11 @@ class DashboardScreen extends StatefulWidget {
 class _DashboardScreenState extends State<DashboardScreen> {
   String homeTeam = "";
   String awayTeam = "";
+  DateTime _selectedDate = DateTime.now();
 
   Future<Map<String, dynamic>>? _dashboardFuture;
   bool _haAnalizzato = false;
 
-  // Database globale esteso di squadre per tutti i principali campionati e tornei
   final List<String> squadreGlobali = [
     // Serie A
     'Atalanta', 'Bologna', 'Cagliari', 'Como', 'Empoli', 'Fiorentina', 'Genoa', 
@@ -68,6 +68,32 @@ class _DashboardScreenState extends State<DashboardScreen> {
     'Boca Juniors', 'River Plate', 'Flamengo', 'Palmeiras'
   ];
 
+  Future<void> _selezionaData(BuildContext context) async {
+    final DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: _selectedDate,
+      firstDate: DateTime.now().subtract(const Duration(days: 30)),
+      lastDate: DateTime.now().add(const Duration(days: 365)),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: const ColorScheme.light(
+              primary: Color(0xFF1E3A8A),
+              onPrimary: Colors.white,
+              onSurface: Color(0xFF1E3A8A),
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+    if (picked != null && picked != _selectedDate) {
+      setState(() {
+        _selectedDate = picked;
+      });
+    }
+  }
+
   void _eseguiAnalisi() {
     if (homeTeam.isEmpty || awayTeam.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -90,6 +116,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Future<Map<String, dynamic>> fetchDashboardData() async {
     const String baseUrl = 'https://schizzo-analytics.onrender.com';
     final String internalMatchId = "${homeTeam.toLowerCase().replaceAll(' ', '_')}_${awayTeam.toLowerCase().replaceAll(' ', '_')}";
+    final String formattedDate = "${_selectedDate.year}-${_selectedDate.month.toString().padLeft(2, '0')}-${_selectedDate.day.toString().padLeft(2, '0')}";
     const int timeoutSeconds = 60;
 
     try {
@@ -100,6 +127,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           "match_id": internalMatchId,
           "squadra_casa": homeTeam,
           "squadra_ospite": awayTeam,
+          "match_date": formattedDate,
         }),
       ).timeout(const Duration(seconds: timeoutSeconds));
 
@@ -111,6 +139,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             "match_id": internalMatchId,
             "home": homeTeam,
             "away": awayTeam,
+            "match_date": formattedDate,
           }),
         ).timeout(const Duration(seconds: timeoutSeconds));
       }
@@ -150,6 +179,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           "Terreno & Copertura": "N/D",
           "Allenatore Casa": "N/D",
           "Allenatore Ospite": "N/D",
+          "Data Match": formattedDate,
           "Arbitro Designato": "In attesa",
         };
       }
@@ -185,6 +215,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final String dataFormattataGrafica = "${_selectedDate.day.toString().padLeft(2, '0')}/${_selectedDate.month.toString().padLeft(2, '0')}/${_selectedDate.year}";
+
     return Scaffold(
       backgroundColor: const Color(0xFFF4F6F9),
       appBar: AppBar(
@@ -215,7 +247,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Text(
-                      "Seleziona Partita (Database Globale)",
+                      "Configurazione Match & Data",
                       style: TextStyle(
                         fontSize: 18, 
                         fontWeight: FontWeight.bold,
@@ -286,6 +318,47 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         );
                       },
                     ),
+                    const SizedBox(height: 12),
+
+                    // Selettore Data Partita
+                    InkWell(
+                      onTap: () => _selezionaData(context),
+                      borderRadius: BorderRadius.circular(10),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 15),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: Colors.grey.shade400),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Row(
+                              children: [
+                                const Icon(Icons.calendar_today, color: Color(0xFF1E3A8A)),
+                                const SizedBox(width: 12),
+                                Text(
+                                  "Data Partita: $dataFormattataGrafica",
+                                  style: const TextStyle(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w500,
+                                    color: Colors.black87,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const Text(
+                              "Cambia",
+                              style: TextStyle(
+                                color: Color(0xFFFF6B00),
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
                     const SizedBox(height: 16),
 
                     ElevatedButton.icon(
@@ -320,7 +393,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           Icon(Icons.analytics_outlined, size: 48, color: Colors.grey),
                           SizedBox(height: 12),
                           Text(
-                            "Digita qualsiasi squadra (es. Juventus, Real Madrid, Bayern, Boca Juniors) per aprire la tendina e avviare l'analisi.",
+                            "Seleziona le squadre, imposta la data esatta del match e avvia l'analisi meteo-statistica.",
                             textAlign: TextAlign.center,
                             style: TextStyle(color: Colors.grey, fontSize: 14),
                           ),
