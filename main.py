@@ -154,7 +154,7 @@ def normalizza_nome_squadra(nome: str) -> str:
 # ==========================================
 DEFAULT_STADIO = {"stadio": "Stadio Generico", "citta": "N/D", "campo": "non trovato", "lat": 0.0, "lon": 0.0, "media_cartellini": "N/D", "coperto": "N/D"}
 DEFAULT_ALLENATORE = {"allenatore": "Non dichiarato", "indice_tattico": "N/D"}
-DEFAULT_LAMBDA = {"lambda_casa": N.D., "lambda_ospite": "N/D"}
+DEFAULT_LAMBDA = {"lambda_casa": "N/D", "lambda_ospite": "N/D"}
 
 # Sostituisci con i tuoi database completi
 DB_STADI = {
