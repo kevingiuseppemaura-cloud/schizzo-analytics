@@ -48,7 +48,6 @@ class _AnalisiMatchScreenState extends State<AnalisiMatchScreen> {
   final TextEditingController homeTeamController = TextEditingController();
   final TextEditingController awayTeamController = TextEditingController();
   
-  // Aggiunti i FocusNode richiesti obbligatoriamente da Autocomplete quando si usa un controller custom
   final FocusNode homeFocusNode = FocusNode();
   final FocusNode awayFocusNode = FocusNode();
   
@@ -123,16 +122,16 @@ class _AnalisiMatchScreenState extends State<AnalisiMatchScreen> {
     });
 
     try {
-      // Chiamata reale al backend Python
+      // Chiamata puntata direttamente al backend online su Render
       final response = await http.post(
-        Uri.parse('http://127.0.0.1:5000/api/calcola-match'),
+        Uri.parse('https://schizzo-analytics.onrender.com/api/calcola-match'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
           'home': homeTeamController.text,
           'away': awayTeamController.text,
           'date': selectedDate?.toIso8601String(),
         }),
-      ).timeout(const Duration(seconds: 10));
+      ).timeout(const Duration(seconds: 15));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -151,9 +150,8 @@ class _AnalisiMatchScreenState extends State<AnalisiMatchScreen> {
         throw Exception('Errore server: ${response.statusCode}');
       }
     } catch (e) {
-      // Fallback in caso di mancata connessione locale per evitare blocchi dell'app
       setState(() {
-        panelEspertiTesto = 'Impossibile connettersi al backend Python locale: $e';
+        panelEspertiTesto = 'Impossibile connettersi al server su Render: $e';
       });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -171,7 +169,7 @@ class _AnalisiMatchScreenState extends State<AnalisiMatchScreen> {
   Widget _buildAutocompleteField(String label, TextEditingController controller, FocusNode focusNode) {
     return Autocomplete<String>(
       textEditingController: controller,
-      focusNode: focusNode, // <-- Passato correttamente per soddisfare l'asserzione di Flutter
+      focusNode: focusNode,
       optionsBuilder: (TextEditingValue textEditingValue) {
         if (textEditingValue.text.isEmpty) {
           return const Iterable<String>.empty();
