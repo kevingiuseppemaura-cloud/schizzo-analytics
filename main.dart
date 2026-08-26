@@ -17,7 +17,7 @@ class MasterCalculatorApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         brightness: Brightness.dark,
-         scaffoldBackgroundColor: const Color(0xFF121212),
+        scaffoldBackgroundColor: const Color(0xFF121212),
         primaryColor: const Color(0xFF0055FF),
         colorScheme: const ColorScheme.dark(
           primary: Color(0xFF0055FF), 
@@ -48,6 +48,10 @@ class _AnalisiMatchScreenState extends State<AnalisiMatchScreen> {
   final TextEditingController homeTeamController = TextEditingController();
   final TextEditingController awayTeamController = TextEditingController();
   
+  // Aggiunti i FocusNode richiesti obbligatoriamente da Autocomplete quando si usa un controller custom
+  final FocusNode homeFocusNode = FocusNode();
+  final FocusNode awayFocusNode = FocusNode();
+  
   bool isLoading = false;
   String panelEspertiTesto = 'I pronostici non sono ancora caricati. Clicca su "Avvia Master Calculator" per avviare il motore di Poisson.';
   Map<String, dynamic> intelligenceData = {
@@ -66,6 +70,15 @@ class _AnalisiMatchScreenState extends State<AnalisiMatchScreen> {
     'Bayern Monaco', 'Borussia Dortmund', 'Bayer Leverkusen',
     'Paris Saint-Germain', 'Olympique Marsiglia', 'Lione'
   ];
+
+  @override
+  void dispose() {
+    homeTeamController.dispose();
+    awayTeamController.dispose();
+    homeFocusNode.dispose();
+    awayFocusNode.dispose();
+    super.dispose();
+  }
 
   Future<void> _selectDate(BuildContext context) async {
     final DateTime? picked = await showDatePicker(
@@ -155,9 +168,10 @@ class _AnalisiMatchScreenState extends State<AnalisiMatchScreen> {
     }
   }
 
-  Widget _buildAutocompleteField(String label, TextEditingController controller) {
+  Widget _buildAutocompleteField(String label, TextEditingController controller, FocusNode focusNode) {
     return Autocomplete<String>(
-      textEditingController: controller, // <-- CORRETTO QUI: collega il controller esterno
+      textEditingController: controller,
+      focusNode: focusNode, // <-- Passato correttamente per soddisfare l'asserzione di Flutter
       optionsBuilder: (TextEditingValue textEditingValue) {
         if (textEditingValue.text.isEmpty) {
           return const Iterable<String>.empty();
@@ -273,9 +287,9 @@ class _AnalisiMatchScreenState extends State<AnalisiMatchScreen> {
             ),
             const SizedBox(height: 16),
 
-            _buildAutocompleteField('Squadra di Casa', homeTeamController),
+            _buildAutocompleteField('Squadra di Casa', homeTeamController, homeFocusNode),
             const SizedBox(height: 16),
-            _buildAutocompleteField('Squadra in Trasferta', awayTeamController),
+            _buildAutocompleteField('Squadra in Trasferta', awayTeamController, awayFocusNode),
             const SizedBox(height: 32),
 
             Theme(
