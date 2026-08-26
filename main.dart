@@ -17,7 +17,7 @@ class MasterCalculatorApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         brightness: Brightness.dark,
-        scaffoldBackgroundColor: const MethodColorReplacement() ?? const Color(0xFF121212),
+         scaffoldBackgroundColor: const Color(0xFF121212),
         primaryColor: const Color(0xFF0055FF),
         colorScheme: const ColorScheme.dark(
           primary: Color(0xFF0055FF), 
