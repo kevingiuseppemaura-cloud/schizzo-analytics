@@ -157,6 +157,7 @@ class _AnalisiMatchScreenState extends State<AnalisiMatchScreen> {
 
   Widget _buildAutocompleteField(String label, TextEditingController controller) {
     return Autocomplete<String>(
+      textEditingController: controller, // <-- CORRETTO QUI: collega il controller esterno
       optionsBuilder: (TextEditingValue textEditingValue) {
         if (textEditingValue.text.isEmpty) {
           return const Iterable<String>.empty();
