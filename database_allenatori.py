@@ -1,7 +1,11 @@
 # database_allenatori.py
 # Indice tattico: 1 (Difensivista/Pragmatico) - 10 (Ultra-Offensivo/High-Pressing)
 
+DEFAULT_ALLENATORE = {"allenatore": "Non dichiarato", "indice_tattico": 5}
+
 DB_ALLENATORI = {
+    "default": DEFAULT_ALLENATORE,
+    
     # --- SERIE A ---
     "atalanta": {"allenatore": "Maurizio Sarri", "indice_tattico": 8},
     "bologna": {"allenatore": "Domenico Tedesco", "indice_tattico": 6},
@@ -130,3 +134,4 @@ DB_ALLENATORI = {
     "angers": {"allenatore": "Alexandre Dujeux", "indice_tattico": 4},
     "auxerre": {"allenatore": "Christophe Pélissier", "indice_tattico": 5}
 }
+

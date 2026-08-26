@@ -144,7 +144,7 @@ def normalizza_nome_squadra(nome: str) -> str:
 # 🗄️ DATABASE PROPRIETARI COMPLETI & FALLBACK
 # ==========================================
 DEFAULT_STADIO = {"stadio": "Stadio Generico", "citta": "N/D", "campo": "non trovato", "lat": 0.0, "lon": 0.0, "media_cartellini": "N/D", "coperto": "N/D"}
-DEFAULT_ALLENATORE = {"allenatore": "Non dichiarato", "indice_tattico": "N/D"}
+DEFAULT_ALLENATORE = {"allenatore": "Non dichiarato", "indice_tattico": 5}
 DEFAULT_LAMBDA = {"lambda_casa": 1.65, "lambda_ospite": 1.20}
 
 DB_STADI = {
@@ -280,6 +280,7 @@ DB_STADI = {
 }
 
 DB_ALLENATORI = {
+    "default": DEFAULT_ALLENATORE,
     "atalanta": {"allenatore": "Maurizio Sarri", "indice_tattico": 8},
     "bologna": {"allenatore": "Domenico Tedesco", "indice_tattico": 6},
     "cagliari": {"allenatore": "Fabio Pisacane", "indice_tattico": 5},
