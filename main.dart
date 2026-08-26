@@ -2,8 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'dart:async';
-// Eventuali import personalizzati esistenti nel tuo progetto, es:
-// import 'widgets/analysis_card.dart';
 
 void main() {
   runApp(const MasterCalculatorApp());
@@ -19,18 +17,23 @@ class MasterCalculatorApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         brightness: Brightness.dark,
-        scaffoldBackgroundColor: const Color(0xFF121212), // Nero fumo scuro
-        primaryColor: const Color(0xFF0055FF), // Blu Elettrico
+        scaffoldBackgroundColor: const MethodColorReplacement() ?? const Color(0xFF121212),
+        primaryColor: const Color(0xFF0055FF),
         colorScheme: const ColorScheme.dark(
           primary: Color(0xFF0055FF), 
-          secondary: Color(0xFFFF6600), // Arancione
-          surface: Color(0xFF1E1E1E), // Nero fumo chiaro
+          secondary: Color(0xFFFF6600),
+          surface: Color(0xFF1E1E1E),
         ),
         fontFamily: 'Roboto', 
       ),
       home: const AnalisiMatchScreen(),
     );
   }
+}
+
+class MethodColorReplacement {
+  const MethodColorReplacement();
+  Color call() => const Color(0xFF121212);
 }
 
 class AnalisiMatchScreen extends StatefulWidget {
@@ -45,9 +48,8 @@ class _AnalisiMatchScreenState extends State<AnalisiMatchScreen> {
   final TextEditingController homeTeamController = TextEditingController();
   final TextEditingController awayTeamController = TextEditingController();
   
-  // Stati per i dati dinamici in arrivo dal backend/esperti
   bool isLoading = false;
-  String panelEspertiTesto = 'I pronostici del panel non sono ancora caricati. Clicca su "Avvia Master Calculator" per estrarre i dati.';
+  String panelEspertiTesto = 'I pronostici non sono ancora caricati. Clicca su "Avvia Master Calculator" per avviare il motore di Poisson.';
   Map<String, dynamic> intelligenceData = {
     'mister': 'In attesa di calcolo...',
     'arbitro': 'Indice non calcolato...',
@@ -92,7 +94,6 @@ class _AnalisiMatchScreenState extends State<AnalisiMatchScreen> {
     }
   }
 
-  // Funzione di chiamata al Backend (es. il tuo main.py / API endpoint)
   Future<void> _avviaMasterCalculator() async {
     if (homeTeamController.text.isEmpty || awayTeamController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -109,8 +110,7 @@ class _AnalisiMatchScreenState extends State<AnalisiMatchScreen> {
     });
 
     try {
-      // Esempio di richiesta HTTP al backend Python locale o remoto
-      /*
+      // Chiamata reale al backend Python
       final response = await http.post(
         Uri.parse('http://127.0.0.1:5000/api/calcola-match'),
         headers: {'Content-Type': 'application/json'},
@@ -124,35 +124,27 @@ class _AnalisiMatchScreenState extends State<AnalisiMatchScreen> {
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         setState(() {
-          panelEspertiTesto = data['panel_esperti'] ?? 'Nessun dato dal panel.';
+          panelEspertiTesto = data['panel_esperti'] ?? 'Nessun dato dal motore.';
           intelligenceData = data['intelligence'] ?? intelligenceData;
         });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Master Calculator & Poisson completati con successo!'),
+            backgroundColor: Color(0xFF0055FF),
+          ),
+        );
+      } else {
+        throw Exception('Errore server: ${response.statusCode}');
       }
-      */
-
-      // Simulazione risposta per integrazione immediata
-      await Future.delayed(const Duration(seconds: 2));
-      setState(() {
-        panelEspertiTesto = 'Il Veggente consiglia: Over 2.5 / Goal (Affidabilità alta basata su esprimenti storici e flussi di cassa).';
-        intelligenceData = {
-          'mister': 'Analizzati e mappati (Indice tattico attivo)',
-          'arbitro': 'Direttore di gara censito con indice di severità',
-          'infortunati': 'Verificati giocatori out da API Football',
-          'stadium': 'Manto erboso e meteo sincronizzati',
-          'flussi': 'Rilevati movimenti anomali sulle quote live'
-        };
-      });
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Master Calculator completato con successo!'),
-          backgroundColor: Color(0xFF0055FF),
-        ),
-      );
     } catch (e) {
+      // Fallback in caso di mancata connessione locale per evitare blocchi dell'app
+      setState(() {
+        panelEspertiTesto = 'Impossibile connettersi al backend Python locale: $e';
+      });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Errore di connessione al backend: $e'),
+          content: Text('Errore di connessione: $e'),
           backgroundColor: Colors.red,
         ),
       );
@@ -256,7 +248,6 @@ class _AnalisiMatchScreenState extends State<AnalisiMatchScreen> {
             ),
             const SizedBox(height: 16),
             
-            // Selettore Data
             InkWell(
               onTap: () => _selectDate(context),
               child: Container(
@@ -281,13 +272,11 @@ class _AnalisiMatchScreenState extends State<AnalisiMatchScreen> {
             ),
             const SizedBox(height: 16),
 
-            // Campi Squadra
             _buildAutocompleteField('Squadra di Casa', homeTeamController),
             const SizedBox(height: 16),
             _buildAutocompleteField('Squadra in Trasferta', awayTeamController),
             const SizedBox(height: 32),
 
-            // Tendina Intelligence di Campo
             Theme(
               data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
               child: ExpansionTile(
@@ -321,7 +310,6 @@ class _AnalisiMatchScreenState extends State<AnalisiMatchScreen> {
             ),
             const SizedBox(height: 16),
 
-            // Tendina Panel Esperti
             Theme(
               data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
               child: ExpansionTile(
@@ -332,7 +320,7 @@ class _AnalisiMatchScreenState extends State<AnalisiMatchScreen> {
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                 collapsedShape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                 title: const Text(
-                  'Panel Esperti',
+                  'Panel Esperti & Poisson',
                   style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 16),
                 ),
                 leading: const Icon(Icons.group, color: Color(0xFFFF6600)),
@@ -347,7 +335,7 @@ class _AnalisiMatchScreenState extends State<AnalisiMatchScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         const Text(
-                          'Il Veggente & Esperti.db',
+                          'Risultati Modello Matematico',
                           style: TextStyle(color: Color(0xFF0055FF), fontWeight: FontWeight.bold, fontSize: 16),
                         ),
                         const SizedBox(height: 8),
@@ -363,7 +351,6 @@ class _AnalisiMatchScreenState extends State<AnalisiMatchScreen> {
             ),
             const SizedBox(height: 40),
 
-            // Pulsante Master Calculator
             ElevatedButton(
               onPressed: isLoading ? null : _avviaMasterCalculator,
               style: ElevatedButton.styleFrom(
@@ -396,7 +383,6 @@ class _AnalisiMatchScreenState extends State<AnalisiMatchScreen> {
             
             const SizedBox(height: 50),
             
-            // Versione Firma
             Center(
               child: Column(
                 children: [
