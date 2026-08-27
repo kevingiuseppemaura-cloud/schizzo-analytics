@@ -60,6 +60,7 @@ class _AnalisiMatchScreenState extends State<AnalisiMatchScreen> {
     'stadium': 'Lat/Lon non inserite...',
     'flussi': 'Analisi quote sospesa...'
   };
+  Map<String, dynamic> poissonResults = {};
 
   final List<String> squadreSupportate = [
     'Juventus', 'Inter', 'Milan', 'Napoli', 'Roma', 'Lazio', 'Frosinone',
@@ -122,7 +123,6 @@ class _AnalisiMatchScreenState extends State<AnalisiMatchScreen> {
     });
 
     try {
-      // Chiamata puntata direttamente al backend online su Render
       final response = await http.post(
         Uri.parse('https://schizzo-analytics.onrender.com/api/calcola-match'),
         headers: {'Content-Type': 'application/json'},
@@ -138,6 +138,7 @@ class _AnalisiMatchScreenState extends State<AnalisiMatchScreen> {
         setState(() {
           panelEspertiTesto = data['panel_esperti'] ?? 'Nessun dato dal motore.';
           intelligenceData = data['intelligence'] ?? intelligenceData;
+          poissonResults = data['poisson'] ?? {};
         });
 
         ScaffoldMessenger.of(context).showSnackBar(
@@ -356,6 +357,56 @@ class _AnalisiMatchScreenState extends State<AnalisiMatchScreen> {
                           panelEspertiTesto,
                           style: const TextStyle(color: Colors.white70, height: 1.5),
                         ),
+                        if (poissonResults.isNotEmpty) ...[
+                          const SizedBox(height: 16),
+                          const Text(
+                            'Linee Under / Over Complete:',
+                            style: TextStyle(color: Color(0xFFFF6600), fontWeight: FontWeight.bold, fontSize: 14),
+                          ),
+                          const SizedBox(height: 6),
+                          ...((poissonResults['under_over'] as Map<String, dynamic>? ?? {}).entries.map((e) => Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 2.0),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(e.key, style: const TextStyle(color: Colors.white70)),
+                                Text('${e.value}%', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                              ],
+                            ),
+                          ))),
+                          const SizedBox(height: 16),
+                          const Text(
+                            'Fasce Multigol:',
+                            style: TextStyle(color: Color(0xFFFF6600), fontWeight: FontWeight.bold, fontSize: 14),
+                          ),
+                          const SizedBox(height: 6),
+                          ...((poissonResults['multigol'] as Map<String, dynamic>? ?? {}).entries.map((e) => Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 2.0),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(e.key, style: const TextStyle(color: Colors.white70)),
+                                Text('${e.value}%', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                              ],
+                            ),
+                          ))),
+                          const SizedBox(height: 16),
+                          const Text(
+                            'Top 3 Risultati Esatti:',
+                            style: TextStyle(color: Color(0xFFFF6600), fontWeight: FontWeight.bold, fontSize: 14),
+                          ),
+                          const SizedBox(height: 6),
+                          ...((poissonResults['top_3_risultati_esatti'] as List<dynamic>? ?? []).map((res) => Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 2.0),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text('Risultato: ${res['risultato']}', style: const TextStyle(color: Colors.white70)),
+                                Text('${res['probabilita']}%', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                              ],
+                            ),
+                          ))),
+                        ],
                       ],
                     ),
                   )
