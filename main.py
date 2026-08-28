@@ -571,7 +571,7 @@ DB_ARBITRI = {
     "deniz aytekin": 2,
     "ahmad heydari": 2,
     "stuart attwell": 2
-}}
+}
 
 @timed_cache(seconds=60)
 def scrappa_arbitro_live(squadra_casa: str, squadra_ospite: str) -> str:
