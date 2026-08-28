@@ -305,13 +305,44 @@ DB_ALLENATORI = {
 
 DB_LAMBDA_SQUADRE = {
     "default": DEFAULT_LAMBDA,
+    # --- SERIE A ---
+    "juventus": {"lambda_casa": 1.90, "lambda_ospite": 1.55},
     "inter": {"lambda_casa": 2.10, "lambda_ospite": 1.75},
-    "atalanta": {"lambda_casa": 2.00, "lambda_ospite": 1.60},
-    "juventus": {"lambda_casa": 1.90, "lambda_ospite": 1.50},
-    "milan": {"lambda_casa": 1.95, "lambda_ospite": 1.55},
-    "napoli": {"lambda_casa": 1.85, "lambda_ospite": 1.45},
-    "roma": {"lambda_casa": 1.80, "lambda_ospite": 1.40},
-    "lazio": {"lambda_casa": 1.75, "lambda_ospite": 1.35},
+    "milan": {"lambda_casa": 1.90, "lambda_ospite": 1.55},
+    "napoli": {"lambda_casa": 1.85, "lambda_ospite": 1.50},
+    "roma": {"lambda_casa": 1.85, "lambda_ospite": 1.50},
+    "lazio": {"lambda_casa": 1.75, "lambda_ospite": 1.40},
+    "atalanta": {"lambda_casa": 1.95, "lambda_ospite": 1.60},
+    "frosinone": {"lambda_casa": 1.40, "lambda_ospite": 1.15},
+    "palermo": {"lambda_casa": 1.45, "lambda_ospite": 1.20},
+    "bari": {"lambda_casa": 1.40, "lambda_ospite": 1.15},
+    "sampdoria": {"lambda_casa": 1.45, "lambda_ospite": 1.20},
+    "parma": {"lambda_casa": 1.50, "lambda_ospite": 1.25},
+
+    # --- LA LIGA ---
+    "real madrid": {"lambda_casa": 2.15, "lambda_ospite": 1.80},
+    "barcellona": {"lambda_casa": 2.10, "lambda_ospite": 1.75},
+    "atletico madrid": {"lambda_casa": 1.95, "lambda_ospite": 1.60},
+
+    # --- PREMIER LEAGUE ---
+    "manchester city": {"lambda_casa": 2.15, "lambda_ospite": 1.80},
+    "arsenal": {"lambda_casa": 2.05, "lambda_ospite": 1.70},
+    "liverpool": {"lambda_casa": 2.05, "lambda_ospite": 1.70},
+    "manchester united": {"lambda_casa": 1.90, "lambda_ospite": 1.55},
+    "chelsea": {"lambda_casa": 1.90, "lambda_ospite": 1.55},
+    "tottenham": {"lambda_casa": 1.85, "lambda_ospite": 1.50},
+
+    # --- BUNDESLIGA ---
+    "bayern monaco": {"lambda_casa": 2.15, "lambda_ospite": 1.80},
+    "borussia dortmund": {"lambda_casa": 1.95, "lambda_ospite": 1.60},
+    "bayer leverkusen": {"lambda_casa": 2.00, "lambda_ospite": 1.65},
+    "rb leipzig": {"lambda_casa": 1.90, "lambda_ospite": 1.55},
+
+    # --- LIGUE 1 ---
+    "paris saint-germain": {"lambda_casa": 2.15, "lambda_ospite": 1.80},
+    "monaco": {"lambda_casa": 1.90, "lambda_ospite": 1.55},
+    "olympique marsiglia": {"lambda_casa": 1.80, "lambda_ospite": 1.45},
+    "lione": {"lambda_casa": 1.80, "lambda_ospite": 1.45},
 }
 
 DB_ARBITRI = {

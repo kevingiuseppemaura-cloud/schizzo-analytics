@@ -31,11 +31,6 @@ class MasterCalculatorApp extends StatelessWidget {
   }
 }
 
-class MethodColorReplacement {
-  const MethodColorReplacement();
-  Color call() => const Color(0xFF121212);
-}
-
 class AnalisiMatchScreen extends StatefulWidget {
   const AnalisiMatchScreen({super.key});
 
@@ -63,12 +58,12 @@ class _AnalisiMatchScreenState extends State<AnalisiMatchScreen> {
   Map<String, dynamic> poissonResults = {};
 
   final List<String> squadreSupportate = [
-    'Juventus', 'Inter', 'Milan', 'Napoli', 'Roma', 'Lazio', 'Frosinone',
+    'Juventus', 'Inter', 'Milan', 'Napoli', 'Roma', 'Lazio', 'Atalanta', 'Frosinone',
     'Palermo', 'Bari', 'Sampdoria', 'Parma',
     'Real Madrid', 'Barcellona', 'Atletico Madrid', 
-    'Manchester City', 'Arsenal', 'Liverpool', 'Manchester United',
-    'Bayern Monaco', 'Borussia Dortmund', 'Bayer Leverkusen',
-    'Paris Saint-Germain', 'Olympique Marsiglia', 'Lione'
+    'Manchester City', 'Arsenal', 'Liverpool', 'Manchester United', 'Chelsea', 'Tottenham',
+    'Bayern Monaco', 'Borussia Dortmund', 'Bayer Leverkusen', 'RB Leipzig',
+    'Paris Saint-Germain', 'Monaco', 'Olympique Marsiglia', 'Lione'
   ];
 
   @override
@@ -191,14 +186,14 @@ class _AnalisiMatchScreenState extends State<AnalisiMatchScreen> {
             labelText: label,
             labelStyle: const TextStyle(color: Colors.grey),
             filled: true,
-            fillColor: const Color(0xFF1E1E1E),
+            fillColor: const Color(0xFF161616),
             enabledBorder: OutlineInputBorder(
-              borderSide: const BorderSide(color: Colors.transparent),
-              borderRadius: BorderRadius.circular(8),
+              borderSide: BorderSide(color: Colors.white.withOpacity(0.05)),
+              borderRadius: BorderRadius.circular(10),
             ),
             focusedBorder: OutlineInputBorder(
               borderSide: const BorderSide(color: Color(0xFF0055FF), width: 2),
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(10),
             ),
             prefixIcon: const Icon(Icons.shield, color: Color(0xFFFF6600)),
           ),
@@ -209,11 +204,11 @@ class _AnalisiMatchScreenState extends State<AnalisiMatchScreen> {
           alignment: Alignment.topLeft,
           child: Material(
             color: const Color(0xFF1E1E1E),
-            elevation: 4.0,
-            borderRadius: BorderRadius.circular(8),
+            elevation: 6.0,
+            borderRadius: BorderRadius.circular(10),
             child: SizedBox(
               height: 200.0,
-              width: MediaQuery.of(context).size.width - 32,
+              width: MediaQuery.of(context).size.width - 64,
               child: ListView.builder(
                 padding: EdgeInsets.zero,
                 itemCount: options.length,
@@ -240,14 +235,14 @@ class _AnalisiMatchScreenState extends State<AnalisiMatchScreen> {
         elevation: 0,
         title: const Text(
           'MATCH ANALYSIS',
-          style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white, letterSpacing: 1.5),
+          style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white, letterSpacing: 1.5, fontSize: 18),
         ),
         centerTitle: true,
         bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(2.0),
+          preferredSize: const Size.fromHeight(1.0),
           child: Container(
-            color: const Color(0xFF0055FF),
-            height: 2.0,
+            color: Colors.white.withOpacity(0.08),
+            height: 1.0,
           ),
         ),
       ),
@@ -256,61 +251,78 @@ class _AnalisiMatchScreenState extends State<AnalisiMatchScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const Text(
-              'PARAMETRI PARTITA',
-              style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF0055FF), letterSpacing: 1.2),
-            ),
-            const SizedBox(height: 16),
-            
-            InkWell(
-              onTap: () => _selectDate(context),
-              child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 16),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF1E1E1E),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            // SEZIONE PARAMETRI IN CARD PULITA
+            Card(
+              color: const Color(0xFF1E1E1E),
+              elevation: 2,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Text(
-                      selectedDate == null 
-                          ? 'Seleziona Data Match' 
-                          : '${selectedDate!.day.toString().padLeft(2, '0')}/${selectedDate!.month.toString().padLeft(2, '0')}/${selectedDate!.year}',
-                      style: const TextStyle(color: Colors.white, fontSize: 16),
+                    const Text(
+                      'PARAMETRI PARTITA',
+                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF0055FF), letterSpacing: 1.2),
                     ),
-                    const Icon(Icons.calendar_today, color: Color(0xFFFF6600)),
+                    const SizedBox(height: 16),
+                    InkWell(
+                      onTap: () => _selectDate(context),
+                      borderRadius: BorderRadius.circular(10),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF161616),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: Colors.white.withOpacity(0.05)),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              selectedDate == null 
+                                  ? 'Seleziona Data Match' 
+                                  : '${selectedDate!.day.toString().padLeft(2, '0')}/${selectedDate!.month.toString().padLeft(2, '0')}/${selectedDate!.year}',
+                              style: const TextStyle(color: Colors.white, fontSize: 15),
+                            ),
+                            const Icon(Icons.calendar_today, color: Color(0xFFFF6600), size: 20),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    _buildAutocompleteField('Squadra di Casa', homeTeamController, homeFocusNode),
+                    const SizedBox(height: 14),
+                    _buildAutocompleteField('Squadra in Trasferta', awayTeamController, awayFocusNode),
                   ],
                 ),
               ),
             ),
             const SizedBox(height: 16),
 
-            _buildAutocompleteField('Squadra di Casa', homeTeamController, homeFocusNode),
-            const SizedBox(height: 16),
-            _buildAutocompleteField('Squadra in Trasferta', awayTeamController, awayFocusNode),
-            const SizedBox(height: 32),
-
-            Theme(
-              data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+            // INTELLIGENCE DI CAMPO
+            Card(
+              color: const Color(0xFF1E1E1E),
+              elevation: 2,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               child: ExpansionTile(
-                collapsedBackgroundColor: const Color(0xFF1E1E1E),
-                backgroundColor: const Color(0xFF1E1E1E),
+                collapsedBackgroundColor: Colors.transparent,
+                backgroundColor: Colors.transparent,
                 iconColor: const Color(0xFF0055FF),
                 collapsedIconColor: Colors.white54,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                collapsedShape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                 title: const Text(
                   'Intelligence di Campo',
-                  style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 16),
+                  style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 15),
                 ),
                 leading: const Icon(Icons.radar, color: Color(0xFF0055FF)),
                 children: [
                   Padding(
-                    padding: const EdgeInsets.all(16.0),
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        const Divider(color: Colors.white10),
+                        const SizedBox(height: 8),
                         _InfoRow(icon: Icons.psychology, title: 'Mister e Tattica', value: intelligenceData['mister']!),
                         _InfoRow(icon: Icons.sports, title: 'Direttore di Gara', value: intelligenceData['arbitro']!),
                         _InfoRow(icon: Icons.medical_services, title: 'Infortunati Critici', value: intelligenceData['infortunati']!),
@@ -324,88 +336,117 @@ class _AnalisiMatchScreenState extends State<AnalisiMatchScreen> {
             ),
             const SizedBox(height: 16),
 
-            Theme(
-              data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+            // PANEL ESPERTI & POISSON
+            Card(
+              color: const Color(0xFF1E1E1E),
+              elevation: 2,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               child: ExpansionTile(
-                collapsedBackgroundColor: const Color(0xFF1E1E1E),
-                backgroundColor: const Color(0xFF1E1E1E),
+                collapsedBackgroundColor: Colors.transparent,
+                backgroundColor: Colors.transparent,
                 iconColor: const Color(0xFFFF6600),
                 collapsedIconColor: Colors.white54,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                collapsedShape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                 title: const Text(
                   'Panel Esperti & Poisson',
-                  style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 16),
+                  style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 15),
                 ),
                 leading: const Icon(Icons.group, color: Color(0xFFFF6600)),
                 children: [
-                  Container(
-                    padding: const EdgeInsets.all(16.0),
-                    width: double.infinity,
-                    decoration: const BoxDecoration(
-                      border: Border(left: BorderSide(color: Color(0xFFFF6600), width: 4)),
-                    ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        const Divider(color: Colors.white10),
+                        const SizedBox(height: 8),
                         const Text(
-                          'Risultati Modello Matematico',
-                          style: TextStyle(color: Color(0xFF0055FF), fontWeight: FontWeight.bold, fontSize: 16),
+                          'Risultato Modello Matematico',
+                          style: TextStyle(color: Color(0xFF0055FF), fontWeight: FontWeight.bold, fontSize: 14),
                         ),
                         const SizedBox(height: 8),
                         Text(
                           panelEspertiTesto,
-                          style: const TextStyle(color: Colors.white70, height: 1.5),
+                          style: const TextStyle(color: Colors.white70, height: 1.5, fontSize: 13),
                         ),
                         if (poissonResults.isNotEmpty) ...[
                           const SizedBox(height: 16),
                           const Text(
                             'Linee Under / Over Complete:',
-                            style: TextStyle(color: Color(0xFFFF6600), fontWeight: FontWeight.bold, fontSize: 14),
+                            style: TextStyle(color: Color(0xFFFF6600), fontWeight: FontWeight.bold, fontSize: 13),
                           ),
                           const SizedBox(height: 6),
-                          ...((poissonResults['under_over'] as Map<String, dynamic>? ?? {}).entries.map((e) => Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 2.0),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Text(e.key, style: const TextStyle(color: Colors.white70)),
-                                Text('${e.value}%', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                              ],
-                            ),
-                          ))),
+                          ...((poissonResults['under_over'] as Map<String, dynamic>? ?? {}).entries.map((e) {
+                            final double val = double.tryParse(e.value.toString()) ?? 0.0;
+                            return Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 3.0),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Text(e.key, style: const TextStyle(color: Colors.white70, fontSize: 13)),
+                                  Text(
+                                    '${e.value}%', 
+                                    style: TextStyle(
+                                      color: val > 80 ? const Color(0xFFFF6600) : Colors.white, 
+                                      fontWeight: FontWeight.bold, 
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          })),
                           const SizedBox(height: 16),
                           const Text(
                             'Fasce Multigol:',
-                            style: TextStyle(color: Color(0xFFFF6600), fontWeight: FontWeight.bold, fontSize: 14),
+                            style: TextStyle(color: Color(0xFFFF6600), fontWeight: FontWeight.bold, fontSize: 13),
                           ),
                           const SizedBox(height: 6),
-                          ...((poissonResults['multigol'] as Map<String, dynamic>? ?? {}).entries.map((e) => Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 2.0),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Text(e.key, style: const TextStyle(color: Colors.white70)),
-                                Text('${e.value}%', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                              ],
-                            ),
-                          ))),
+                          ...((poissonResults['multigol'] as Map<String, dynamic>? ?? {}).entries.map((e) {
+                            final double val = double.tryParse(e.value.toString()) ?? 0.0;
+                            return Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 3.0),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Text(e.key, style: const TextStyle(color: Colors.white70, fontSize: 13)),
+                                  Text(
+                                    '${e.value}%', 
+                                    style: TextStyle(
+                                      color: val > 80 ? const Color(0xFFFF6600) : Colors.white, 
+                                      fontWeight: FontWeight.bold, 
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          })),
                           const SizedBox(height: 16),
                           const Text(
                             'Top 3 Risultati Esatti:',
-                            style: TextStyle(color: Color(0xFFFF6600), fontWeight: FontWeight.bold, fontSize: 14),
+                            style: TextStyle(color: Color(0xFFFF6600), fontWeight: FontWeight.bold, fontSize: 13),
                           ),
                           const SizedBox(height: 6),
-                          ...((poissonResults['top_3_risultati_esatti'] as List<dynamic>? ?? []).map((res) => Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 2.0),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Text('Risultato: ${res['risultato']}', style: const TextStyle(color: Colors.white70)),
-                                Text('${res['probabilita']}%', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                              ],
-                            ),
-                          ))),
+                          ...((poissonResults['top_3_risultati_esatti'] as List<dynamic>? ?? []).map((res) {
+                            final double val = double.tryParse((res['probabilita'] ?? 0).toString()) ?? 0.0;
+                            return Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 3.0),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Text('Risultato: ${res['risultato']}', style: const TextStyle(color: Colors.white70, fontSize: 13)),
+                                  Text(
+                                    '${res['probabilita']}%', 
+                                    style: TextStyle(
+                                      color: val > 80 ? const Color(0xFFFF6600) : Colors.white, 
+                                      fontWeight: FontWeight.bold, 
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          })),
                         ],
                       ],
                     ),
@@ -413,18 +454,19 @@ class _AnalisiMatchScreenState extends State<AnalisiMatchScreen> {
                 ],
               ),
             ),
-            const SizedBox(height: 40),
+            const SizedBox(height: 24),
 
+            // PULSANTE AZIONE PRINCIPALE
             ElevatedButton(
               onPressed: isLoading ? null : _avviaMasterCalculator,
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF0055FF),
-                padding: const EdgeInsets.symmetric(vertical: 18),
+                padding: const EdgeInsets.symmetric(vertical: 16),
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: BorderRadius.circular(12),
                 ),
-                elevation: 8,
-                shadowColor: const Color(0xFF0055FF).withOpacity(0.5),
+                elevation: 4,
+                shadowColor: const Color(0xFF0055FF).withOpacity(0.4),
               ),
               child: isLoading
                   ? const SizedBox(
@@ -435,39 +477,39 @@ class _AnalisiMatchScreenState extends State<AnalisiMatchScreen> {
                   : const Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.bolt, color: Colors.white),
+                        Icon(Icons.bolt, color: Colors.white, size: 20),
                         SizedBox(width: 8),
                         Text(
                           'AVVIA MASTER CALCULATOR',
-                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white, letterSpacing: 1.0),
+                          style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white, letterSpacing: 1.0),
                         ),
                       ],
                     ),
             ),
             
-            const SizedBox(height: 50),
+            const SizedBox(height: 36),
             
             Center(
               child: Column(
                 children: [
-                  const Icon(Icons.sports_soccer, color: Color(0xFFFF6600), size: 28),
-                  const SizedBox(height: 12),
+                  const Icon(Icons.sports_soccer, color: Color(0xFFFF6600), size: 24),
+                  const SizedBox(height: 8),
                   const Text(
                     'SIGNATURE EDITION',
                     style: TextStyle(
                       color: Color(0xFF0055FF),
-                      letterSpacing: 3.0,
-                      fontSize: 12,
+                      letterSpacing: 2.5,
+                      fontSize: 11,
                       fontWeight: FontWeight.w900,
                     ),
                   ),
-                  const SizedBox(height: 6),
+                  const SizedBox(height: 4),
                   Text(
                     'Progettato e sviluppato da Maura Kevin Giuseppe',
                     style: TextStyle(
                       color: Colors.grey.shade600,
                       fontStyle: FontStyle.italic,
-                      fontSize: 12,
+                      fontSize: 11,
                     ),
                   ),
                 ],
@@ -495,23 +537,23 @@ class _InfoRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 16.0),
+      padding: const EdgeInsets.only(bottom: 12.0),
       child: Row(
         children: [
-          Icon(icon, color: Colors.white54, size: 20),
-          const SizedBox(width: 12),
+          Icon(icon, color: Colors.white54, size: 18),
+          const SizedBox(width: 10),
           Expanded(
             flex: 2,
             child: Text(
               title,
-              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w500, fontSize: 13),
             ),
           ),
           Expanded(
             flex: 3,
             child: Text(
               value,
-              style: const TextStyle(color: Colors.grey),
+              style: const TextStyle(color: Colors.grey, fontSize: 13),
               textAlign: TextAlign.right,
             ),
           ),
