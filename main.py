@@ -459,6 +459,25 @@ def elabora_mercati_poisson(l_casa: float, l_ospite: float):
     p_X = sum(prob for score, prob in matrice.items() if int(score.split('-')[0]) == int(score.split('-')[1]))
     p_2 = sum(prob for score, prob in matrice.items() if int(score.split('-')[0]) < int(score.split('-')[1]))
     
+    p_1_val = round(p_1 * 100, 2)
+    p_X_val = round(p_X * 100, 2)
+    p_2_val = round(p_2 * 100, 2)
+    
+    esito_1x2 = {
+        "1": {
+            "probabilita": p_1_val,
+            "quota": round(100 / p_1_val, 2) if p_1_val > 0 else 0.0
+        },
+        "X": {
+            "probabilita": p_X_val,
+            "quota": round(100 / p_X_val, 2) if p_X_val > 0 else 0.0
+        },
+        "2": {
+            "probabilita": p_2_val,
+            "quota": round(100 / p_2_val, 2) if p_2_val > 0 else 0.0
+        }
+    }
+    
     p_gg = sum(prob for score, prob in matrice.items() if int(score.split('-')[0]) > 0 and int(score.split('-')[1]) > 0)
     p_ng = 1.0 - p_gg
     
@@ -479,11 +498,7 @@ def elabora_mercati_poisson(l_casa: float, l_ospite: float):
     top_esatti_fmt = [{"risultato": k, "probabilita": round(v * 100, 2)} for k, v in top_esatti]
 
     return {
-        "esito_1x2": {
-            "1": round(p_1 * 100, 2),
-            "X": round(p_X * 100, 2),
-            "2": round(p_2 * 100, 2)
-        },
+        "esito_1x2": esito_1x2,
         "gol_nogol": {
             "Gol": round(p_gg * 100, 2),
             "NoGol": round(p_ng * 100, 2)
@@ -553,7 +568,7 @@ def calcola_match(req: CalcolaMatchRequest):
     
     panel_testo = (
         f"Analisi Poisson Matematica:\n"
-        f"• 1X2 -> 1: {p1x2['1']}% | X: {p1x2['X']}% | 2: {p1x2['2']}%\n"
+        f"• 1X2 -> 1: {p1x2['1']['probabilita']}% | X: {p1x2['X']['probabilita']}% | 2: {p1x2['2']['probabilita']}%\n"
         f"• Under/Over 2.5 -> Under: {uo25['Under 2.5']}% | Over: {uo25['Over 2.5']}%\n"
         f"• GOL/NO GOL -> GOL: {gg['Gol']}% | NO GOL: {gg['NoGol']}%"
     )

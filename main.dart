@@ -368,8 +368,70 @@ class _AnalisiMatchScreenState extends State<AnalisiMatchScreen> {
                           panelEspertiTesto,
                           style: const TextStyle(color: Colors.white70, height: 1.5, fontSize: 13),
                         ),
+                        
+                        // SEZIONE 1X2 CON GRIGLIA A TRE COLONNE ORDINATA
+                        if (poissonResults.containsKey('esito_1x2')) ...[
+                          const SizedBox(height: 20),
+                          const Text(
+                            'Esito 1X2 (Poisson):',
+                            style: TextStyle(color: Color(0xFFFF6600), fontWeight: FontWeight.bold, fontSize: 13),
+                          ),
+                          const SizedBox(height: 8),
+                          Row(
+                            children: ((poissonResults['esito_1x2'] as Map<String, dynamic>? ?? {})).entries.map((e) {
+                              final data = e.value as Map<String, dynamic>;
+                              final double prob = double.tryParse((data['probabilita'] ?? 0).toString()) ?? 0.0;
+                              final double quota = double.tryParse((data['quota'] ?? 0).toString()) ?? 0.0;
+                              
+                              // Trova la probabilità massima per evidenziare il favorito
+                              final mapValues = (poissonResults['esito_1x2'] as Map<String, dynamic>).values
+                                  .map((v) => double.tryParse((v['probabilita'] ?? 0).toString()) ?? 0.0)
+                                  .toList();
+                              final maxProb = mapValues.isNotEmpty ? mapValues.reduce((a, b) => a > b ? a : b) : 0.0;
+                              final bool isFavorite = prob == maxProb;
+
+                              return Expanded(
+                                child: Container(
+                                  margin: const EdgeInsets.symmetric(horizontal: 4),
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF161616),
+                                    borderRadius: BorderRadius.circular(10),
+                                    border: Border.all(
+                                      color: isFavorite ? const Color(0xFF0055FF) : Colors.white.withOpacity(0.05),
+                                      width: isFavorite ? 2.0 : 1.0,
+                                    ),
+                                  ),
+                                  child: Column(
+                                    children: [
+                                      Text(
+                                        e.key,
+                                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+                                      ),
+                                      const SizedBox(height: 6),
+                                      Text(
+                                        '$prob%',
+                                        style: TextStyle(
+                                          color: isFavorite ? const Color(0xFFFF6600) : Colors.white70,
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 14,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        'Quota $quota',
+                                        style: TextStyle(color: Colors.grey.shade400, fontSize: 11),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            }).toList(),
+                          ),
+                        ],
+
                         if (poissonResults.isNotEmpty) ...[
-                          const SizedBox(height: 16),
+                          const SizedBox(height: 20),
                           const Text(
                             'Linee Under / Over Complete:',
                             style: TextStyle(color: Color(0xFFFF6600), fontWeight: FontWeight.bold, fontSize: 13),
