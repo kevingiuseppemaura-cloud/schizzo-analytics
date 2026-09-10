@@ -358,16 +358,75 @@ class _AnalisiMatchScreenState extends State<AnalisiMatchScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         const Divider(color: Colors.white10),
-                        const SizedBox(height: 8),
-                        const Text(
-                          'Risultato Modello Matematico',
-                          style: TextStyle(color: Color(0xFF0055FF), fontWeight: FontWeight.bold, fontSize: 14),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          panelEspertiTesto,
-                          style: const TextStyle(color: Colors.white70, height: 1.5, fontSize: 13),
-                        ),
+                        
+                        // SEZIONE GOL / NO GOL (SOSTITUISCE IL TESTO RIPETITIVO)
+                        if (poissonResults.containsKey('gol_no_gol')) ...[
+                          const SizedBox(height: 8),
+                          const Text(
+                            'Esito Gol / No Gol (Poisson):',
+                            style: TextStyle(color: Color(0xFFFF6600), fontWeight: FontWeight.bold, fontSize: 13),
+                          ),
+                          const SizedBox(height: 8),
+                          Row(
+                            children: ((poissonResults['gol_no_gol'] as Map<String, dynamic>? ?? {})).entries.map((e) {
+                              final dynVal = e.value;
+                              final double prob = dynVal is Map 
+                                  ? (double.tryParse((dynVal['probabilita'] ?? dynVal['probability'] ?? 0).toString()) ?? 0.0)
+                                  : (double.tryParse(dynVal.toString()) ?? 0.0);
+                              final double quota = dynVal is Map 
+                                  ? (double.tryParse((dynVal['quota'] ?? 0).toString()) ?? 0.0)
+                                  : 0.0;
+                              
+                              // Trova la probabilità massima per evidenziare il favorito
+                              final mapValues = (poissonResults['gol_no_gol'] as Map<String, dynamic>).values
+                                  .map((v) => v is Map 
+                                      ? (double.tryParse((v['probabilita'] ?? v['probability'] ?? 0).toString()) ?? 0.0)
+                                      : (double.tryParse(v.toString()) ?? 0.0))
+                                  .toList();
+                              final maxProb = mapValues.isNotEmpty ? mapValues.reduce((a, b) => a > b ? a : b) : 0.0;
+                              final bool isFavorite = prob == maxProb;
+
+                              return Expanded(
+                                child: Container(
+                                  margin: const EdgeInsets.symmetric(horizontal: 4),
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF161616),
+                                    borderRadius: BorderRadius.circular(10),
+                                    border: Border.all(
+                                      color: isFavorite ? const Color(0xFF0055FF) : Colors.white.withOpacity(0.05),
+                                      width: isFavorite ? 2.0 : 1.0,
+                                    ),
+                                  ),
+                                  child: Column(
+                                    children: [
+                                      Text(
+                                        e.key,
+                                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
+                                      ),
+                                      const SizedBox(height: 6),
+                                      Text(
+                                        '$prob%',
+                                        style: TextStyle(
+                                          color: isFavorite ? const Color(0xFFFF6600) : Colors.white70,
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 14,
+                                        ),
+                                      ),
+                                      if (quota > 0) ...[
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          'Quota $quota',
+                                          style: TextStyle(color: Colors.grey.shade400, fontSize: 11),
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                ),
+                              );
+                            }).toList(),
+                          ),
+                        ],
                         
                         // SEZIONE 1X2 CON GRIGLIA A TRE COLONNE ORDINATA
                         if (poissonResults.containsKey('esito_1x2')) ...[
