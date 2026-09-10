@@ -132,8 +132,8 @@ class _AnalisiMatchScreenState extends State<AnalisiMatchScreen> {
         final data = jsonDecode(response.body);
         setState(() {
           panelEspertiTesto = data['panel_esperti'] ?? 'Nessun dato dal motore.';
-          intelligenceData = data['intelligence'] ?? intelligenceData;
-          poissonResults = data['poisson'] ?? {};
+          intelligenceData = Map<String, dynamic>.from(data['intelligence'] ?? intelligenceData);
+          poissonResults = Map<String, dynamic>.from(data['poisson'] ?? {});
         });
 
         ScaffoldMessenger.of(context).showSnackBar(
@@ -251,7 +251,6 @@ class _AnalisiMatchScreenState extends State<AnalisiMatchScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // SEZIONE PARAMETRI IN CARD PULITA
             Card(
               color: const Color(0xFF1E1E1E),
               elevation: 2,
@@ -300,7 +299,6 @@ class _AnalisiMatchScreenState extends State<AnalisiMatchScreen> {
             ),
             const SizedBox(height: 16),
 
-            // INTELLIGENCE DI CAMPO
             Card(
               color: const Color(0xFF1E1E1E),
               elevation: 2,
@@ -323,11 +321,11 @@ class _AnalisiMatchScreenState extends State<AnalisiMatchScreen> {
                       children: [
                         const Divider(color: Colors.white10),
                         const SizedBox(height: 8),
-                        _InfoRow(icon: Icons.psychology, title: 'Mister e Tattica', value: intelligenceData['mister']!),
-                        _InfoRow(icon: Icons.sports, title: 'Direttore di Gara', value: intelligenceData['arbitro']!),
-                        _InfoRow(icon: Icons.medical_services, title: 'Infortunati Critici', value: intelligenceData['infortunati']!),
-                        _InfoRow(icon: Icons.stadium, title: 'Stadio e Meteo', value: intelligenceData['stadium']!),
-                        _InfoRow(icon: Icons.trending_up, title: 'Flussi di Cassa', value: intelligenceData['flussi']!),
+                        _InfoRow(icon: Icons.psychology, title: 'Mister e Tattica', value: intelligenceData['mister'] ?? ''),
+                        _InfoRow(icon: Icons.sports, title: 'Direttore di Gara', value: intelligenceData['arbitro'] ?? ''),
+                        _InfoRow(icon: Icons.medical_services, title: 'Infortunati Critici', value: intelligenceData['infortunati'] ?? ''),
+                        _InfoRow(icon: Icons.stadium, title: 'Stadio e Meteo', value: intelligenceData['stadium'] ?? ''),
+                        _InfoRow(icon: Icons.trending_up, title: 'Flussi di Cassa', value: intelligenceData['flussi'] ?? ''),
                       ],
                     ),
                   )
@@ -336,7 +334,6 @@ class _AnalisiMatchScreenState extends State<AnalisiMatchScreen> {
             ),
             const SizedBox(height: 16),
 
-            // PANEL ESPERTI & POISSON
             Card(
               color: const Color(0xFF1E1E1E),
               elevation: 2,
@@ -358,10 +355,16 @@ class _AnalisiMatchScreenState extends State<AnalisiMatchScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         const Divider(color: Colors.white10),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 8.0),
+                          child: Text(
+                            panelEspertiTesto,
+                            style: const TextStyle(color: Colors.white70, fontSize: 13, height: 1.4),
+                          ),
+                        ),
                         
-                        // SEZIONE GOL / NO GOL (SOSTITUISCE IL TESTO RIPETITIVO)
                         if (poissonResults.containsKey('gol_no_gol')) ...[
-                          const SizedBox(height: 8),
+                          const SizedBox(height: 12),
                           const Text(
                             'Esito Gol / No Gol (Poisson):',
                             style: TextStyle(color: Color(0xFFFF6600), fontWeight: FontWeight.bold, fontSize: 13),
@@ -377,7 +380,6 @@ class _AnalisiMatchScreenState extends State<AnalisiMatchScreen> {
                                   ? (double.tryParse((dynVal['quota'] ?? 0).toString()) ?? 0.0)
                                   : 0.0;
                               
-                              // Trova la probabilità massima per evidenziare il favorito
                               final mapValues = (poissonResults['gol_no_gol'] as Map<String, dynamic>).values
                                   .map((v) => v is Map 
                                       ? (double.tryParse((v['probabilita'] ?? v['probability'] ?? 0).toString()) ?? 0.0)
@@ -428,7 +430,6 @@ class _AnalisiMatchScreenState extends State<AnalisiMatchScreen> {
                           ),
                         ],
                         
-                        // SEZIONE 1X2 CON GRIGLIA A TRE COLONNE ORDINATA
                         if (poissonResults.containsKey('esito_1x2')) ...[
                           const SizedBox(height: 20),
                           const Text(
@@ -442,7 +443,6 @@ class _AnalisiMatchScreenState extends State<AnalisiMatchScreen> {
                               final double prob = double.tryParse((data['probabilita'] ?? 0).toString()) ?? 0.0;
                               final double quota = double.tryParse((data['quota'] ?? 0).toString()) ?? 0.0;
                               
-                              // Trova la probabilità massima per evidenziare il favorito
                               final mapValues = (poissonResults['esito_1x2'] as Map<String, dynamic>).values
                                   .map((v) => double.tryParse((v['probabilita'] ?? 0).toString()) ?? 0.0)
                                   .toList();
@@ -577,7 +577,6 @@ class _AnalisiMatchScreenState extends State<AnalisiMatchScreen> {
             ),
             const SizedBox(height: 24),
 
-            // PULSANTE AZIONE PRINCIPALE
             ElevatedButton(
               onPressed: isLoading ? null : _avviaMasterCalculator,
               style: ElevatedButton.styleFrom(

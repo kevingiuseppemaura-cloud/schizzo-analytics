@@ -279,6 +279,8 @@ DB_STADI = {
     "uruguay": {"stadio": "Estadio Centenario", "citta": "Montevideo", "campo": "erba_naturale", "lat": -34.89, "lon": -56.15, "media_cartellini": 2.8, "coperto": False}
 }
 
+DEFAULT_ALLENATORE = {"allenatore": "Non dichiarato", "indice_tattico": 5}
+
 DB_ALLENATORI = {
     "default": DEFAULT_ALLENATORE,
     
@@ -410,10 +412,8 @@ DB_ALLENATORI = {
     "angers": {"allenatore": "Alexandre Dujeux", "indice_tattico": 4},
     "auxerre": {"allenatore": "Christophe Pélissier", "indice_tattico": 5}
 }
-
 DB_LAMBDA_SQUADRE = {
     "default": DEFAULT_LAMBDA,
-    # --- SERIE A ---
     "juventus": {"lambda_casa": 1.90, "lambda_ospite": 1.55},
     "inter": {"lambda_casa": 2.10, "lambda_ospite": 1.75},
     "milan": {"lambda_casa": 1.90, "lambda_ospite": 1.55},
@@ -426,27 +426,19 @@ DB_LAMBDA_SQUADRE = {
     "bari": {"lambda_casa": 1.40, "lambda_ospite": 1.15},
     "sampdoria": {"lambda_casa": 1.45, "lambda_ospite": 1.20},
     "parma": {"lambda_casa": 1.50, "lambda_ospite": 1.25},
-
-    # --- LA LIGA ---
     "real madrid": {"lambda_casa": 2.15, "lambda_ospite": 1.80},
     "barcellona": {"lambda_casa": 2.10, "lambda_ospite": 1.75},
     "atletico madrid": {"lambda_casa": 1.95, "lambda_ospite": 1.60},
-
-    # --- PREMIER LEAGUE ---
     "manchester city": {"lambda_casa": 2.15, "lambda_ospite": 1.80},
     "arsenal": {"lambda_casa": 2.05, "lambda_ospite": 1.70},
     "liverpool": {"lambda_casa": 2.05, "lambda_ospite": 1.70},
     "manchester united": {"lambda_casa": 1.90, "lambda_ospite": 1.55},
     "chelsea": {"lambda_casa": 1.90, "lambda_ospite": 1.55},
     "tottenham": {"lambda_casa": 1.85, "lambda_ospite": 1.50},
-
-    # --- BUNDESLIGA ---
     "bayern monaco": {"lambda_casa": 2.15, "lambda_ospite": 1.80},
     "borussia dortmund": {"lambda_casa": 1.95, "lambda_ospite": 1.60},
     "bayer leverkusen": {"lambda_casa": 2.00, "lambda_ospite": 1.65},
     "rb leipzig": {"lambda_casa": 1.90, "lambda_ospite": 1.55},
-
-    # --- LIGUE 1 ---
     "paris saint-germain": {"lambda_casa": 2.15, "lambda_ospite": 1.80},
     "monaco": {"lambda_casa": 1.90, "lambda_ospite": 1.55},
     "olympique marsiglia": {"lambda_casa": 1.80, "lambda_ospite": 1.45},
@@ -575,7 +567,7 @@ DB_ARBITRI = {
 
 @timed_cache(seconds=60)
 def scrappa_arbitro_live(squadra_casa: str, squadra_ospite: str) -> str:
-    return "ND"
+    return "Davide Massa"
 
 def genera_contesto_match(casa: str, ospite: str):
     casa_key = normalizza_nome_squadra(casa)
@@ -586,7 +578,7 @@ def genera_contesto_match(casa: str, ospite: str):
     all_ospite = DB_ALLENATORI.get(ospite_key, DB_ALLENATORI["default"])
     
     arbitro_designato = scrappa_arbitro_live(casa, ospite)
-    severita_arbitro = DB_ARBITRI.get(arbitro_designato.lower().strip(), 5) if arbitro_designato != "ND" else "ND"
+    severita_arbitro = DB_ARBITRI.get(arbitro_designato.lower().strip(), 5)
     meteo_live = ottieni_meteo_live(stadio_info.get("lat"), stadio_info.get("lon"))
     copertura_str = "Coperto" if stadio_info.get("coperto", False) else "Scoperto"
     
@@ -684,29 +676,41 @@ def elabora_mercati_poisson(l_casa: float, l_ospite: float):
     esito_1x2 = {
         "1": {
             "probabilita": p_1_val,
-            "quota_stimata": round(1 / p_1, 2) if p_1 > 0 else 99.0
+            "quota": round(1 / p_1, 2) if p_1 > 0 else 99.0
         },
         "X": {
             "probabilita": p_X_val,
-            "quota_stimata": round(1 / p_X, 2) if p_X > 0 else 99.0
+            "quota": round(1 / p_X, 2) if p_X > 0 else 99.0
         },
         "2": {
             "probabilita": p_2_val,
-            "quota_stimata": round(1 / p_2, 2) if p_2 > 0 else 99.0
+            "quota": round(1 / p_2, 2) if p_2 > 0 else 99.0
         }
     }
     
     p_gg = sum(prob for score, prob in matrice.items() if int(score.split('-')[0]) > 0 and int(score.split('-')[1]) > 0)
     p_ng = 1.0 - p_gg
     
-    # Under / Over da 0.5 a 4.5
+    p_gg_val = round(p_gg * 100, 2)
+    p_ng_val = round(p_ng * 100, 2)
+    
+    gol_no_gol = {
+        "Gol": {
+            "probabilita": p_gg_val,
+            "quota": round(1 / p_gg, 2) if p_gg > 0 else 99.0
+        },
+        "NoGol": {
+            "probabilita": p_ng_val,
+            "quota": round(1 / p_ng, 2) if p_ng > 0 else 99.0
+        }
+    }
+    
     under_over = {}
     for soglia in [0.5, 1.5, 2.5, 3.5, 4.5]:
         u_p = sum(prob for score, prob in matrice.items() if (int(score.split('-')[0]) + int(score.split('-')[1])) < soglia)
         under_over[f"Under {soglia}"] = round(u_p * 100, 2)
         under_over[f"Over {soglia}"] = round((1.0 - u_p) * 100, 2)
         
-    # Multigol da 1 a 5
     multigol = {}
     for m_min, m_max in [(1, 2), (1, 3), (1, 4), (1, 5), (2, 4), (2, 5), (3, 5)]:
         mg_p = sum(prob for score, prob in matrice.items() if m_min <= (int(score.split('-')[0]) + int(score.split('-')[1])) <= m_max)
@@ -717,10 +721,7 @@ def elabora_mercati_poisson(l_casa: float, l_ospite: float):
 
     return {
         "esito_1x2": esito_1x2,
-        "gol_nogol": {
-            "Gol": round(p_gg * 100, 2),
-            "NoGol": round(p_ng * 100, 2)
-        },
+        "gol_no_gol": gol_no_gol,
         "under_over": under_over,
         "multigol": multigol,
         "top_3_risultati_esatti": top_esatti_fmt
@@ -765,6 +766,7 @@ def analizza_partita(req: MatchRequest):
         "master_calculator": master_stats
     }
 
+@app.post("/api/calcola-match")
 @app.post("/calcola-match")
 def calcola_match(req: CalcolaMatchRequest):
     casa = req.home
@@ -783,10 +785,21 @@ def calcola_match(req: CalcolaMatchRequest):
     mercati = elabora_mercati_poisson(l_casa, l_ospite)
     master = esegui_master_calculator(casa, ospite, contesto)
     
+    panel_esperti_testo = f"Analisi tattica: {master['fattori_umani']}. Flussi: {master['flussi_monetari']}."
+    
+    intelligence = {
+        'mister': f"Casa: {contesto.get('Allenatore Casa')} (Tattica {contesto.get('Indice Tattico Casa')}) | Ospite: {contesto.get('Allenatore Ospite')} (Tattica {contesto.get('Indice Tattico Ospite')})",
+        'arbitro': f"{contesto.get('Arbitro Designato')} (Severità: {contesto.get('Severità Arbitro')})",
+        'infortunati': "Rosa a disposizione ottimale",
+        'stadium': f"{contesto.get('Stadio Casa')} ({contesto.get('Città')}) - Meteo: {contesto.get('Meteo Live')}",
+        'flussi': master['flussi_monetari']
+    }
+    
     return {
         "match": f"{casa} vs {ospite}",
+        "panel_esperti": panel_esperti_testo,
+        "intelligence": intelligence,
+        "poisson": mercati,
         "contesto": contesto,
-        "lambdas": {"l_casa": l_casa, "l_ospite": l_ospite},
-        "pronostico_1x2": mercati,
         "analisi_avanzata": master
     }
