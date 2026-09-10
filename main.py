@@ -684,15 +684,15 @@ def elabora_mercati_poisson(l_casa: float, l_ospite: float):
     esito_1x2 = {
         "1": {
             "probabilita": p_1_val,
-            "quota": round(100 / p_1_val, 2) if p_1_val > 0 else 0.0
+            "quota_stimata": round(1 / p_1, 2) if p_1 > 0 else 99.0
         },
         "X": {
             "probabilita": p_X_val,
-            "quota": round(100 / p_X_val, 2) if p_X_val > 0 else 0.0
+            "quota_stimata": round(1 / p_X, 2) if p_X > 0 else 99.0
         },
         "2": {
             "probabilita": p_2_val,
-            "quota": round(100 / p_2_val, 2) if p_2_val > 0 else 0.0
+            "quota_stimata": round(1 / p_2, 2) if p_2 > 0 else 99.0
         }
     }
     
@@ -765,43 +765,28 @@ def analizza_partita(req: MatchRequest):
         "master_calculator": master_stats
     }
 
-@app.post("/api/calcola-match")
+@app.post("/calcola-match")
 def calcola_match(req: CalcolaMatchRequest):
-    home_team = req.home
-    away_team = req.away
+    casa = req.home
+    ospite = req.away
     
-    casa_key = normalizza_nome_squadra(home_team)
-    ospite_key = normalizza_nome_squadra(away_team)
-
-    stats_casa = DB_LAMBDA_SQUADRE.get(casa_key, DB_LAMBDA_SQUADRE["default"])
-    stats_ospite = DB_LAMBDA_SQUADRE.get(ospite_key, DB_LAMBDA_SQUADRE["default"])
-
-    poisson_data = elabora_mercati_poisson(stats_casa["lambda_casa"], stats_ospite["lambda_ospite"])
-    contesto = genera_contesto_match(home_team, away_team)
-    master_stats = esegui_master_calculator(home_team, away_team, contesto)
-
-    p1x2 = poisson_data["esito_1x2"]
-    uo25 = poisson_data["under_over"]
-    gg = poisson_data["gol_nogol"]
+    contesto = genera_contesto_match(casa, ospite)
+    casa_key = normalizza_nome_squadra(casa)
+    ospite_key = normalizza_nome_squadra(ospite)
     
-    panel_testo = (
-        f"Analisi Poisson Matematica:\n"
-        f"• 1X2 -> 1: {p1x2['1']['probabilita']}% | X: {p1x2['X']['probabilita']}% | 2: {p1x2['2']['probabilita']}%\n"
-        f"• Under/Over 2.5 -> Under: {uo25['Under 2.5']}% | Over: {uo25['Over 2.5']}%\n"
-        f"• GOL/NO GOL -> GOL: {gg['Gol']}% | NO GOL: {gg['NoGol']}%"
-    )
-
-    intelligence_risposta = {
-        'mister': f"Tattica Casa: {contesto['Indice Tattico Casa']} | Tattica Ospite: {contesto['Indice Tattico Ospite']} -> {master_stats['fattori_umani']}",
-        'arbitro': f"Designato: {contesto['Arbitro Designato']} (Severità: {contesto['Severità Arbitro']})",
-        'infortunati': 'Parametri rosa verificati.',
-        'stadium': f"Stadio: {contesto['Stadio Casa']} ({contesto['Terreno & Copertura']}) - Meteo: {contesto['Meteo Live']}",
-        'flussi': master_stats['flussi_monetari'],
-        'storico': master_stats['trend_storici']
-    }
-
+    lambdas_casa = DB_LAMBDA_SQUADRE.get(casa_key, DB_LAMBDA_SQUADRE["default"])
+    l_casa = lambdas_casa["lambda_casa"]
+    
+    lambdas_ospite = DB_LAMBDA_SQUADRE.get(ospite_key, DB_LAMBDA_SQUADRE["default"])
+    l_ospite = lambdas_ospite["lambda_ospite"]
+    
+    mercati = elabora_mercati_poisson(l_casa, l_ospite)
+    master = esegui_master_calculator(casa, ospite, contesto)
+    
     return {
-        'panel_esperti': panel_testo,
-        'intelligence': intelligence_risposta,
-        'poisson': poisson_data
+        "match": f"{casa} vs {ospite}",
+        "contesto": contesto,
+        "lambdas": {"l_casa": l_casa, "l_ospite": l_ospite},
+        "pronostico_1x2": mercati,
+        "analisi_avanzata": master
     }
