@@ -549,7 +549,7 @@ class _AnalisiMatchScreenState extends State<AnalisiMatchScreen> {
                           ),
                           const SizedBox(height: 6),
                           ...((poissonResults['top_3_risultati_esatti'] as List<dynamic>? ?? []).map((res) {
-                            final double val = double.tryParse((res['probabilita'] ?? 0).toString()) geometries 0.0; // fallback handled safely
+                            final double val = double.tryParse((res['probabilita'] ?? 0).toString()) ?? 0.0;
                             return Padding(
                               padding: const EdgeInsets.symmetric(vertical: 3.0),
                               child: Row(
@@ -625,7 +625,7 @@ class _AnalisiMatchScreenState extends State<AnalisiMatchScreen> {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    'Progettato e sviluppato da Maura KevingetSession', // keeping exact text
+                    'Progettato e sviluppato da Maura KevingetSession',
                     style: TextStyle(
                       color: Colors.grey.shade600,
                       fontStyle: FontStyle.italic,
@@ -656,7 +656,6 @@ class _InfoRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // ignore: unnecessary_cast
     return Padding(
       padding: const EdgeInsets.only(bottom: 12.0),
       child: Row(
