@@ -31,6 +31,208 @@ class MasterCalculatorApp extends StatelessWidget {
   }
 }
 
+class MatchAnalysisResponse {
+  final String match;
+  final String matchId;
+  final Map<String, dynamic> parametriApplicati;
+  final PoissonData poisson;
+  final ContestoMatch contesto;
+  final AnalisiAvanzata analisiAvanzata;
+  final Intelligence intelligence;
+  final String panelEsperti;
+
+  MatchAnalysisResponse({
+    required this.match,
+    required this.matchId,
+    required this.parametriApplicati,
+    required this.poisson,
+    required this.contesto,
+    required this.analisiAvanzata,
+    required this.intelligence,
+    required this.panelEsperti,
+  });
+
+  factory MatchAnalysisResponse.fromJson(Map<String, dynamic> json) {
+    final poissonData = json['poisson'] ?? json['previsioni_poisson'] ?? {};
+    final contestoData = json['contesto'] ?? json['info_match'] ?? {};
+    final analisiData = json['analisi_avanzata'] ?? json['master_calculator'] ?? {};
+
+    return MatchAnalysisResponse(
+      match: json['match'] ?? '',
+      matchId: json['match_id'] ?? '',
+      parametriApplicati: json['parametri_applicati'] ?? {},
+      poisson: PoissonData.fromJson(poissonData),
+      contesto: ContestoMatch.fromJson(contestoData),
+      analisiAvanzata: AnalisiAvanzata.fromJson(analisiData),
+      intelligence: Intelligence.fromJson(json['intelligence'] ?? {}),
+      panelEsperti: json['panel_esperti'] ?? '',
+    );
+  }
+}
+
+class PoissonData {
+  final Map<String, dynamic> esito1x2;
+  final Map<String, dynamic> golNoGol;
+  final Map<String, dynamic> underOver;
+  final List<Map<String, dynamic>> topRisultatiEsatti;
+
+  PoissonData({
+    required this.esito1x2,
+    required this.golNoGol,
+    required this.underOver,
+    required this.topRisultatiEsatti,
+  });
+
+  factory PoissonData.fromJson(Map<String, dynamic> json) {
+    List<dynamic> rawTop = json['top_3_risultati_esatti'] ?? [];
+    return PoissonData(
+      esito1x2: json['esito_1x2'] ?? {},
+      golNoGol: json['gol_no_gol'] ?? {},
+      underOver: json['under_over'] ?? {},
+      topRisultatiEsatti: rawTop.map((e) => Map<String, dynamic>.from(e)).toList(),
+    );
+  }
+}
+
+class ContestoMatch {
+  final String stadioCasa;
+  final String citta;
+  final String terrenoCopertura;
+  final String allenatoreCasa;
+  final String indiceTatticoCasa;
+  final String allenatoreOspite;
+  final String indiceTatticoOspite;
+  final String arbitroDesignato;
+  final int severitaArbitro;
+  final String meteoLive;
+  final double mediaCartelliniStadio;
+
+  ContestoMatch({
+    required this.stadioCasa,
+    required this.citta,
+    required this.terrenoCopertura,
+    required this.allenatoreCasa,
+    required this.indiceTatticoCasa,
+    required this.allenatoreOspite,
+    required this.indiceTatticoOspite,
+    required this.arbitroDesignato,
+    required this.severitaArbitro,
+    required this.meteoLive,
+    required this.mediaCartelliniStadio,
+  });
+
+  factory ContestoMatch.fromJson(Map<String, dynamic> json) {
+    return ContestoMatch(
+      stadioCasa: json['Stadio Casa'] ?? 'N/D',
+      citta: json['Città'] ?? 'N/D',
+      terrenoCopertura: json['Terreno & Copertura'] ?? 'N/D',
+      allenatoreCasa: json['Allenatore Casa'] ?? 'N/D',
+      indiceTatticoCasa: json['Indice Tattico Casa']?.toString() ?? '5',
+      allenatoreOspite: json['Allenatore Ospite'] ?? 'N/D',
+      indiceTatticoOspite: json['Indice Tattico Ospite']?.toString() ?? '5',
+      arbitroDesignato: json['Arbitro Designato'] ?? 'N/D',
+      severitaArbitro: json['Severità Arbitro'] ?? 5,
+      meteoLive: json['Meteo Live'] ?? 'N/D',
+      mediaCartelliniStadio: (json['Media Cartellini Stadio'] ?? 2.0).toDouble(),
+    );
+  }
+}
+
+class AnalisiAvanzata {
+  final String fattoriUmani;
+  final String disciplinare;
+  final String flussiMonetari;
+  final bool whaleAlert;
+  final String trendStorici;
+
+  AnalisiAvanzata({
+    required this.fattoriUmani,
+    required this.disciplinare,
+    required this.flussiMonetari,
+    required this.whaleAlert,
+    required this.trendStorici,
+  });
+
+  factory AnalisiAvanzata.fromJson(Map<String, dynamic> json) {
+    return AnalisiAvanzata(
+      fattoriUmani: json['fattori_umani'] ?? '',
+      disciplinare: json['disciplinare'] ?? '',
+      flussiMonetari: json['flussi_monetari'] ?? '',
+      whaleAlert: json['whale_alert'] ?? false,
+      trendStorici: json['trend_storici'] ?? '',
+    );
+  }
+}
+
+class Intelligence {
+  final String mister;
+  final String arbitro;
+  final String infortunati;
+  final String stadium;
+  final String flussi;
+
+  Intelligence({
+    required this.mister,
+    required this.arbitro,
+    required this.infortunati,
+    required this.stadium,
+    required this.flussi,
+  });
+
+  factory Intelligence.fromJson(Map<String, dynamic> json) {
+    return Intelligence(
+      mister: json['mister'] ?? '',
+      arbitro: json['arbitro'] ?? '',
+      infortunati: json['infortunati'] ?? '',
+      stadium: json['stadium'] ?? '',
+      flussi: json['flussi'] ?? '',
+    );
+  }
+}
+
+class SchizzoApiService {
+  final String baseUrl;
+
+  SchizzoApiService({required this.baseUrl});
+
+  Future<MatchAnalysisResponse> calcolaMatch({
+    required String home,
+    required String away,
+    double? lambdaCasa,
+    double? lambdaOspite,
+    double moltiplicatoreInfortuni = 1.0,
+    double moltiplicatoreStadio = 1.0,
+    double moltiplicatoreArbitro = 1.0,
+  }) async {
+    final url = Uri.parse('$baseUrl/api/calcola-match');
+    
+    final payload = {
+      "home": home,
+      "away": away,
+      "squadra_casa": home,
+      "squadra_ospite": away,
+      if (lambdaCasa != null) "lambda_casa": lambdaCasa,
+      if (lambdaOspite != null) "lambda_ospite": lambdaOspite,
+      "moltiplicatore_infortuni": moltiplicatoreInfortuni,
+      "moltiplicatore_stadio": moltiplicatoreStadio,
+      "moltiplicatore_arbitro": moltiplicatoreArbitro,
+    };
+
+    final response = await http.post(
+      url,
+      headers: {"Content-Type": "application/json"},
+      body: jsonEncode(payload),
+    );
+
+    if (response.statusCode == 200) {
+      final decoded = jsonDecode(utf8.decode(response.bodyBytes));
+      return MatchAnalysisResponse.fromJson(decoded);
+    } else {
+      throw Exception("Errore nel calcolo del match: ${response.statusCode}");
+    }
+  }
+}
+
 class AnalisiMatchScreen extends StatefulWidget {
   const AnalisiMatchScreen({super.key});
 
@@ -124,16 +326,30 @@ class _AnalisiMatchScreenState extends State<AnalisiMatchScreen> {
         body: jsonEncode({
           'home': homeTeamController.text,
           'away': awayTeamController.text,
+          'squadra_casa': homeTeamController.text,
+          'squadra_ospite': awayTeamController.text,
           'date': selectedDate?.toIso8601String(),
         }),
       ).timeout(const Duration(seconds: 15));
 
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
+      if (response.statusCode == 200 || response.statusCode == 250) {
+        final decodedBody = jsonDecode(utf8.decode(response.bodyBytes));
+        final analysisResponse = MatchAnalysisResponse.fromJson(decodedBody);
+
         setState(() {
-          panelEspertiTesto = data['panel_esperti'] ?? 'Nessun dato dal motore.';
-          intelligenceData = Map<String, dynamic>.from(data['intelligence'] ?? intelligenceData);
-          poissonResults = Map<String, dynamic>.from(data['poisson'] ?? {});
+          panelEspertiTesto = analysisResponse.panelEsperti.isNotEmpty 
+              ? analysisResponse.panelEsperti 
+              : 'Nessun dato dal motore.';
+              
+          intelligenceData = {
+            'mister': analysisResponse.intelligence.mister,
+            'arbitro': analysisResponse.intelligence.arbitro,
+            'infortunati': analysisResponse.intelligence.infortunati,
+            'stadium': analysisResponse.intelligence.stadium,
+            'flussi': analysisResponse.intelligence.flussi,
+          };
+          
+          poissonResults = decodedBody['poisson'] ?? decodedBody['previsioni_poisson'] ?? {};
         });
 
         ScaffoldMessenger.of(context).showSnackBar(
@@ -439,12 +655,15 @@ class _AnalisiMatchScreenState extends State<AnalisiMatchScreen> {
                           const SizedBox(height: 8),
                           Row(
                             children: ((poissonResults['esito_1x2'] as Map<String, dynamic>? ?? {})).entries.map((e) {
-                              final data = e.value as Map<String, dynamic>;
+                              final data = e.value is Map ? e.value as Map<String, dynamic> : <String, dynamic>{'probabilita': e.value};
                               final double prob = double.tryParse((data['probabilita'] ?? 0).toString()) ?? 0.0;
                               final double quota = double.tryParse((data['quota'] ?? 0).toString()) ?? 0.0;
                               
                               final mapValues = (poissonResults['esito_1x2'] as Map<String, dynamic>).values
-                                  .map((v) => double.tryParse((v['probabilita'] ?? 0).toString()) ?? 0.0)
+                                  .map((v) {
+                                    final d = v is Map ? v : {'probabilita': v};
+                                    return double.tryParse((d['probabilita'] ?? 0).toString()) ?? 0.0;
+                                  })
                                   .toList();
                               final maxProb = mapValues.isNotEmpty ? mapValues.reduce((a, b) => a > b ? a : b) : 0.0;
                               final bool isFavorite = prob == maxProb;
@@ -625,7 +844,7 @@ class _AnalisiMatchScreenState extends State<AnalisiMatchScreen> {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    'Progettato e sviluppato da Maura KevingetSession',
+                    'Progettato e sviluppato da Maura Kevin',
                     style: TextStyle(
                       color: Colors.grey.shade600,
                       fontStyle: FontStyle.italic,
