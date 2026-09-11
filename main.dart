@@ -40,6 +40,7 @@ class MatchAnalysisResponse {
   final AnalisiAvanzata analisiAvanzata;
   final Intelligence intelligence;
   final String panelEsperti;
+  final String parereIa;
 
   MatchAnalysisResponse({
     required this.match,
@@ -50,6 +51,7 @@ class MatchAnalysisResponse {
     required this.analisiAvanzata,
     required this.intelligence,
     required this.panelEsperti,
+    required this.parereIa,
   });
 
   factory MatchAnalysisResponse.fromJson(Map<String, dynamic> json) {
@@ -66,6 +68,7 @@ class MatchAnalysisResponse {
       analisiAvanzata: AnalisiAvanzata.fromJson(analisiData),
       intelligence: Intelligence.fromJson(json['intelligence'] ?? {}),
       panelEsperti: json['panel_esperti'] ?? '',
+      parereIa: json['parere_ia'] ?? json['gemini_opinion'] ?? json['parere_gemini'] ?? json['parere_ia_gemini'] ?? json['panel_esperti'] ?? '',
     );
   }
 }
@@ -250,6 +253,8 @@ class _AnalisiMatchScreenState extends State<AnalisiMatchScreen> {
   
   bool isLoading = false;
   String panelEspertiTesto = 'I pronostici non sono ancora caricati. Clicca su "Avvia Master Calculator" per avviare il motore di Poisson.';
+  String parereIaTesto = 'Il parere dell\'I.A. Gemini comparirà qui dopo il calcolo.';
+  
   Map<String, dynamic> intelligenceData = {
     'mister': 'In attesa di calcolo...',
     'arbitro': 'Indice non calcolato...',
@@ -340,6 +345,8 @@ class _AnalisiMatchScreenState extends State<AnalisiMatchScreen> {
           panelEspertiTesto = analysisResponse.panelEsperti.isNotEmpty 
               ? analysisResponse.panelEsperti 
               : 'Nessun dato dal motore.';
+
+          parereIaTesto = decodedBody['parere_ia'] ?? decodedBody['gemini_opinion'] ?? decodedBody['parere_gemini'] ?? (analysisResponse.parereIa.isNotEmpty ? analysisResponse.parereIa : 'Nessun parere disponibile.');
               
           intelligenceData = {
             'mister': analysisResponse.intelligence.mister,
@@ -364,6 +371,7 @@ class _AnalisiMatchScreenState extends State<AnalisiMatchScreen> {
     } catch (e) {
       setState(() {
         panelEspertiTesto = 'Impossibile connettersi al server su Render: $e';
+        parereIaTesto = 'Impossibile recuperare il parere dell\'I.A.';
       });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -546,6 +554,37 @@ class _AnalisiMatchScreenState extends State<AnalisiMatchScreen> {
                     ),
                   )
                 ],
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // SEZIONE DEDICATA AL PARERE DELL'I.A. GEMINI
+            Card(
+              color: const Color(0xFF1E1E1E),
+              elevation: 2,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Row(
+                      children: [
+                        Icon(Icons.auto_awesome, color: Color(0xFF0055FF), size: 20),
+                        SizedBox(width: 8),
+                        Text(
+                          'PARERE I.A. GEMINI',
+                          style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF0055FF), letterSpacing: 1.2),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      parereIaTesto,
+                      style: const TextStyle(color: Colors.white70, fontSize: 13, height: 1.4),
+                    ),
+                  ],
+                ),
               ),
             ),
             const SizedBox(height: 16),
