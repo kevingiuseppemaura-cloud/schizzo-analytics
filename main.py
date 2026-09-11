@@ -180,6 +180,14 @@ DEFAULT_ALLENATORE = {"allenatore": "Non dichiarato", "indice_tattico": 5}
 DEFAULT_LAMBDA = {"lambda_casa": 1.65, "lambda_ospite": 1.20}
 
 DB_STADI = {
+    "default": {
+        "Stadio Casa": "Stadio Principale",
+        "Città": "N/D",
+        "Terreno & Copertura": "Erba naturale",
+        "Allenatore Casa": "N/D",
+        "Indice Tattico Casa": 5,
+        "Media Cartellini Stadio": 2.5
+    },
    # SERIE A[cite: 1]
     "atalanta": {"stadio": "Gewiss Stadium", "citta": "Bergamo", "campo": "erba_naturale", "lat": 45.71, "lon": 9.68, "media_cartellini": 2.4, "coperto": False}, #[cite: 1]
     "bologna": {"stadio": "Stadio Renato Dall'Ara", "citta": "Bologna", "campo": "erba_naturale", "lat": 44.49, "lon": 11.31, "media_cartellini": 2.3, "coperto": False}, #[cite: 1]
