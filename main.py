@@ -30,9 +30,11 @@ def timed_cache(seconds: int = 60):
     return decorator
 
 # ==========================================
-# 🌤️ CONFIGURAZIONE METEO (OPENWEATHERMAP)
+# 🌤️ CONFIGURAZIONE METEO & API ESTERNE
 # ==========================================
 OPENWEATHER_API_KEY = os.environ.get("OPENWEATHER_API_KEY", "1276c6c958e9fa1f6d99da6fadb02421")
+FOOTBALL_DATA_API_KEY = os.environ.get("FOOTBALL_DATA_API_KEY")
+FOOTBALL_DATA_BASE_URL = "https://api.football-data.org/v4/"
 
 @timed_cache(seconds=60)
 def ottieni_meteo_live(lat: float, lon: float) -> str:
@@ -53,6 +55,19 @@ def ottieni_meteo_live(lat: float, lon: float) -> str:
     except Exception:
         return "Servizio meteo irraggiungibile"
 
+def sincronizza_dati_football_data():
+    if not FOOTBALL_DATA_API_KEY:
+        return False
+    headers = {"X-Auth-Token": FOOTBALL_DATA_API_KEY}
+    try:
+        response = requests.get(f"{FOOTBALL_DATA_BASE_URL}competitions/SA/standings", headers=headers, timeout=5)
+        if response.status_code == 200:
+            data = response.json()
+            return True
+    except Exception as e:
+        print(f"Errore sincronizzazione Football-Data: {e}")
+    return False
+
 # ==========================================
 # 🔌 MODULI ESTERNI (PLUG & PLAY)
 # ==========================================
@@ -61,6 +76,20 @@ try:
 except ImportError:
     def get_expert_predictions(match_id):
         return {"status": "warning", "message": "Modulo esperti temporaneamente non disponibile", "data": []}
+
+# ==========================================
+# 📊 DIZIONARI METRICHE AVANZATE & OVERRIDE
+# ==========================================
+DB_EFFICIENZA_XG = {}
+DB_PPDA = {}
+DB_DUELLI = {}
+DB_ACCURATEZZA_BALISTICA = {}
+
+DB_OVERRIDE_FATTORE_CAMPO = {
+    'juventus': 1.22,
+    'inter': 1.20,
+    'frosinone': 1.10,
+}
 
 # ==========================================
 # 🔄 MAPPATURA ALIAS E NORMALIZZAZIONE
@@ -279,8 +308,6 @@ DB_STADI = {
     "uruguay": {"stadio": "Estadio Centenario", "citta": "Montevideo", "campo": "erba_naturale", "lat": -34.89, "lon": -56.15, "media_cartellini": 2.8, "coperto": False}
 }
 
-DEFAULT_ALLENATORE = {"allenatore": "Non dichiarato", "indice_tattico": 5}
-
 DB_ALLENATORI = {
     "default": DEFAULT_ALLENATORE,
     
@@ -412,6 +439,7 @@ DB_ALLENATORI = {
     "angers": {"allenatore": "Alexandre Dujeux", "indice_tattico": 4},
     "auxerre": {"allenatore": "Christophe Pélissier", "indice_tattico": 5}
 }
+
 DB_LAMBDA_SQUADRE = {
     "default": DEFAULT_LAMBDA,
     "juventus": {"lambda_casa": 1.90, "lambda_ospite": 1.55},
@@ -646,12 +674,34 @@ class CalcolaMatchRequest(BaseModel):
     date: Optional[str] = None
 
 # ==========================================
-# 🧮 CORE ENGINE: MOTORE DI POISSON
+# 🧮 CORE ENGINE: MOTORE DI POISSON & AVANZATO
 # ==========================================
 def poisson_probability(k: int, lambd: float) -> float:
     if lambd <= 0:
         return 0.0
     return (math.pow(lambd, k) * math.exp(-lambd)) / math.factorial(k)
+
+def calcola_lambda_avanzato(casa_key: str, ospite_key: str, l_casa_base: float, l_ospite_base: float, molt_infortuni: float = 1.0, molt_stadio: float = 1.0, molt_arbitro: float = 1.0):
+    # Fattore campo: 19% di base (1.19) o override specifico
+    fattore_campo = DB_OVERRIDE_FATTORE_CAMPO.get(casa_key, 1.19)
+    
+    # Metriche avanzate (con fallback a 1.0)
+    eff_casa = DB_EFFICIENZA_XG.get(casa_key, 1.0)
+    acc_casa = DB_ACCURATEZZA_BALISTICA.get(casa_key, 1.0)
+    duelli_casa = DB_DUELLI.get(casa_key, 1.0)
+    
+    eff_trasferta = DB_EFFICIENZA_XG.get(ospite_key, 1.0)
+    acc_trasferta = DB_ACCURATEZZA_BALISTICA.get(ospite_key, 1.0)
+    duelli_trasferta = DB_DUELLI.get(ospite_key, 1.0)
+    
+    # Pressione PPDA dell'avversario
+    ppda_trasferta = DB_PPDA.get(ospite_key, 11.0)
+    disturbo_pressing = 0.95 if ppda_trasferta < 9.5 else 1.0
+    
+    l_casa_finale = l_casa_base * fattore_campo * eff_casa * acc_casa * duelli_casa * molt_infortuni * molt_stadio
+    l_ospite_finale = l_ospite_base * eff_trasferta * acc_trasferta * duelli_trasferta * disturbo_pressing * molt_arbitro
+    
+    return round(l_casa_finale, 3), round(l_ospite_finale, 3)
 
 def calcola_matrice_risultati(l_casa: float, l_ospite: float, max_gol: int = 5):
     matrice = {}
@@ -747,8 +797,13 @@ def analizza_partita(req: MatchRequest):
     l_casa_base = req.lambda_casa if req.lambda_casa is not None else stats_casa["lambda_casa"]
     l_ospite_base = req.lambda_ospite if req.lambda_ospite is not None else stats_ospite["lambda_ospite"]
 
-    l_casa_adj = l_casa_base * req.moltiplicatore_infortuni * req.moltiplicatore_stadio
-    l_ospite_adj = l_ospite_base * req.moltiplicatore_arbitro
+    l_casa_adj, l_ospite_adj = calcola_lambda_avanzato(
+        casa_key, ospite_key,
+        l_casa_base, l_ospite_base,
+        req.moltiplicatore_infortuni,
+        req.moltiplicatore_stadio,
+        req.moltiplicatore_arbitro
+    )
     
     risultati_poisson = elabora_mercati_poisson(l_casa_adj, l_ospite_adj)
     contesto_match = genera_contesto_match(casa=casa, ospite=ospite)
@@ -777,10 +832,12 @@ def calcola_match(req: CalcolaMatchRequest):
     ospite_key = normalizza_nome_squadra(ospite)
     
     lambdas_casa = DB_LAMBDA_SQUADRE.get(casa_key, DB_LAMBDA_SQUADRE["default"])
-    l_casa = lambdas_casa["lambda_casa"]
+    l_casa_base = lambdas_casa["lambda_casa"]
     
     lambdas_ospite = DB_LAMBDA_SQUADRE.get(ospite_key, DB_LAMBDA_SQUADRE["default"])
-    l_ospite = lambdas_ospite["lambda_ospite"]
+    l_ospite_base = lambdas_ospite["lambda_ospite"]
+    
+    l_casa, l_ospite = calcola_lambda_avanzato(casa_key, ospite_key, l_casa_base, l_ospite_base)
     
     mercati = elabora_mercati_poisson(l_casa, l_ospite)
     master = esegui_master_calculator(casa, ospite, contesto)
