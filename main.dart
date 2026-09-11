@@ -59,6 +59,13 @@ class MatchAnalysisResponse {
     final contestoData = json['contesto'] ?? json['info_match'] ?? {};
     final analisiData = json['analisi_avanzata'] ?? json['master_calculator'] ?? {};
 
+    // Estrazione pulita della stringa tipster inviata direttamente dal backend
+    String iaOpinion = json['consiglio_gemini'] ?? json['parere_ia'] ?? json['gemini_opinion'] ?? json['parere_gemini'] ?? json['consiglio_gioco'] ?? '';
+
+    if (iaOpinion.isEmpty) {
+      iaOpinion = 'In attesa del parere esperto dal server per questo match.';
+    }
+
     return MatchAnalysisResponse(
       match: json['match'] ?? '',
       matchId: json['match_id'] ?? '',
@@ -67,8 +74,8 @@ class MatchAnalysisResponse {
       contesto: ContestoMatch.fromJson(contestoData),
       analisiAvanzata: AnalisiAvanzata.fromJson(analisiData),
       intelligence: Intelligence.fromJson(json['intelligence'] ?? {}),
-      panelEsperti: json['panel_esperti'] ?? '',
-      parereIa: json['parere_ia'] ?? json['gemini_opinion'] ?? json['parere_gemini'] ?? json['parere_ia_gemini'] ?? json['panel_esperti'] ?? '',
+      panelEsperti: json['panel_esperti'] ?? 'Nessun dettaglio dal panel esperti.',
+      parereIa: iaOpinion,
     );
   }
 }
@@ -193,49 +200,6 @@ class Intelligence {
   }
 }
 
-class SchizzoApiService {
-  final String baseUrl;
-
-  SchizzoApiService({required this.baseUrl});
-
-  Future<MatchAnalysisResponse> calcolaMatch({
-    required String home,
-    required String away,
-    double? lambdaCasa,
-    double? lambdaOspite,
-    double moltiplicatoreInfortuni = 1.0,
-    double moltiplicatoreStadio = 1.0,
-    double moltiplicatoreArbitro = 1.0,
-  }) async {
-    final url = Uri.parse('$baseUrl/api/calcola-match');
-    
-    final payload = {
-      "home": home,
-      "away": away,
-      "squadra_casa": home,
-      "squadra_ospite": away,
-      if (lambdaCasa != null) "lambda_casa": lambdaCasa,
-      if (lambdaOspite != null) "lambda_ospite": lambdaOspite,
-      "moltiplicatore_infortuni": moltiplicatoreInfortuni,
-      "moltiplicatore_stadio": moltiplicatoreStadio,
-      "moltiplicatore_arbitro": moltiplicatoreArbitro,
-    };
-
-    final response = await http.post(
-      url,
-      headers: {"Content-Type": "application/json"},
-      body: jsonEncode(payload),
-    );
-
-    if (response.statusCode == 200) {
-      final decoded = jsonDecode(utf8.decode(response.bodyBytes));
-      return MatchAnalysisResponse.fromJson(decoded);
-    } else {
-      throw Exception("Errore nel calcolo del match: ${response.statusCode}");
-    }
-  }
-}
-
 class AnalisiMatchScreen extends StatefulWidget {
   const AnalisiMatchScreen({super.key});
 
@@ -252,8 +216,8 @@ class _AnalisiMatchScreenState extends State<AnalisiMatchScreen> {
   final FocusNode awayFocusNode = FocusNode();
   
   bool isLoading = false;
-  String panelEspertiTesto = 'I pronostici non sono ancora caricati. Clicca su "Avvia Master Calculator" per avviare il motore di Poisson.';
-  String parereIaTesto = 'Il parere dell\'I.A. Gemini comparirà qui dopo il calcolo.';
+  String panelEspertiTesto = 'I pronostici non sono ancora caricati. Clicca su "Avvia Master Calculator".';
+  String parereIaTesto = 'Il parere esperto comparirà qui dopo il calcolo.';
   
   Map<String, dynamic> intelligenceData = {
     'mister': 'In attesa di calcolo...',
@@ -265,7 +229,7 @@ class _AnalisiMatchScreenState extends State<AnalisiMatchScreen> {
   Map<String, dynamic> poissonResults = {};
 
   final List<String> squadreSupportate = [
-    'Juventus', 'Inter', 'Milan', 'Napoli', 'Roma', 'Lazio', 'Atalanta', 'Frosinone',
+    'Juventus', 'Inter', 'Milan', 'Napoli', 'Roma', 'Lazio', 'Atalanta', 'Fiorentina', 'Frosinone',
     'Palermo', 'Bari', 'Sampdoria', 'Parma',
     'Real Madrid', 'Barcellona', 'Atletico Madrid', 
     'Manchester City', 'Arsenal', 'Liverpool', 'Manchester United', 'Chelsea', 'Tottenham',
@@ -342,11 +306,8 @@ class _AnalisiMatchScreenState extends State<AnalisiMatchScreen> {
         final analysisResponse = MatchAnalysisResponse.fromJson(decodedBody);
 
         setState(() {
-          panelEspertiTesto = analysisResponse.panelEsperti.isNotEmpty 
-              ? analysisResponse.panelEsperti 
-              : 'Nessun dato dal motore.';
-
-          parereIaTesto = decodedBody['parere_ia'] ?? decodedBody['gemini_opinion'] ?? decodedBody['parere_gemini'] ?? (analysisResponse.parereIa.isNotEmpty ? analysisResponse.parereIa : 'Nessun parere disponibile.');
+          panelEspertiTesto = analysisResponse.panelEsperti;
+          parereIaTesto = analysisResponse.parereIa;
               
           intelligenceData = {
             'mister': analysisResponse.intelligence.mister,
@@ -361,7 +322,7 @@ class _AnalisiMatchScreenState extends State<AnalisiMatchScreen> {
 
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Master Calculator & Poisson completati con successo!'),
+            content: Text('Master Calculator completato con successo!'),
             backgroundColor: Color(0xFF0055FF),
           ),
         );
@@ -371,7 +332,7 @@ class _AnalisiMatchScreenState extends State<AnalisiMatchScreen> {
     } catch (e) {
       setState(() {
         panelEspertiTesto = 'Impossibile connettersi al server su Render: $e';
-        parereIaTesto = 'Impossibile recuperare il parere dell\'I.A.';
+        parereIaTesto = 'Impossibile recuperare il parere esperto dal server.';
       });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -558,7 +519,7 @@ class _AnalisiMatchScreenState extends State<AnalisiMatchScreen> {
             ),
             const SizedBox(height: 16),
 
-            // SEZIONE DEDICATA AL PARERE DELL'I.A. GEMINI
+            // SEZIONE DEDICATA AL PARERE TIPSTER DI GEMINI
             Card(
               color: const Color(0xFF1E1E1E),
               elevation: 2,
@@ -573,7 +534,7 @@ class _AnalisiMatchScreenState extends State<AnalisiMatchScreen> {
                         Icon(Icons.auto_awesome, color: Color(0xFF0055FF), size: 20),
                         SizedBox(width: 8),
                         Text(
-                          'PARERE I.A. GEMINI',
+                          'COSA GIOCHEREI IO (PARERE I.A.)',
                           style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF0055FF), letterSpacing: 1.2),
                         ),
                       ],
@@ -581,7 +542,7 @@ class _AnalisiMatchScreenState extends State<AnalisiMatchScreen> {
                     const SizedBox(height: 12),
                     Text(
                       parereIaTesto,
-                      style: const TextStyle(color: Colors.white70, fontSize: 13, height: 1.4),
+                      style: const TextStyle(color: Colors.white, fontSize: 13.5, height: 1.5),
                     ),
                   ],
                 ),
@@ -745,87 +706,6 @@ class _AnalisiMatchScreenState extends State<AnalisiMatchScreen> {
                               );
                             }).toList(),
                           ),
-                        ],
-
-                        if (poissonResults.isNotEmpty) ...[
-                          const SizedBox(height: 20),
-                          const Text(
-                            'Linee Under / Over Complete:',
-                            style: TextStyle(color: Color(0xFFFF6600), fontWeight: FontWeight.bold, fontSize: 13),
-                          ),
-                          const SizedBox(height: 6),
-                          ...((poissonResults['under_over'] as Map<String, dynamic>? ?? {}).entries.map((e) {
-                            final double val = double.tryParse(e.value.toString()) ?? 0.0;
-                            return Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 3.0),
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Text(e.key, style: const TextStyle(color: Colors.white70, fontSize: 13)),
-                                  Text(
-                                    '${e.value}%', 
-                                    style: TextStyle(
-                                      color: val > 80 ? const Color(0xFFFF6600) : Colors.white, 
-                                      fontWeight: FontWeight.bold, 
-                                      fontSize: 13,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            );
-                          })),
-                          const SizedBox(height: 16),
-                          const Text(
-                            'Fasce Multigol:',
-                            style: TextStyle(color: Color(0xFFFF6600), fontWeight: FontWeight.bold, fontSize: 13),
-                          ),
-                          const SizedBox(height: 6),
-                          ...((poissonResults['multigol'] as Map<String, dynamic>? ?? {}).entries.map((e) {
-                            final double val = double.tryParse(e.value.toString()) ?? 0.0;
-                            return Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 3.0),
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Text(e.key, style: const TextStyle(color: Colors.white70, fontSize: 13)),
-                                  Text(
-                                    '${e.value}%', 
-                                    style: TextStyle(
-                                      color: val > 80 ? const Color(0xFFFF6600) : Colors.white, 
-                                      fontWeight: FontWeight.bold, 
-                                      fontSize: 13,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            );
-                          })),
-                          const SizedBox(height: 16),
-                          const Text(
-                            'Top 3 Risultati Esatti:',
-                            style: TextStyle(color: Color(0xFFFF6600), fontWeight: FontWeight.bold, fontSize: 13),
-                          ),
-                          const SizedBox(height: 6),
-                          ...((poissonResults['top_3_risultati_esatti'] as List<dynamic>? ?? []).map((res) {
-                            final double val = double.tryParse((res['probabilita'] ?? 0).toString()) ?? 0.0;
-                            return Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 3.0),
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Text('Risultato: ${res['risultato']}', style: const TextStyle(color: Colors.white70, fontSize: 13)),
-                                  Text(
-                                    '${res['probabilita']}%', 
-                                    style: TextStyle(
-                                      color: val > 80 ? const Color(0xFFFF6600) : Colors.white, 
-                                      fontWeight: FontWeight.bold, 
-                                      fontSize: 13,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            );
-                          })),
                         ],
                       ],
                     ),
