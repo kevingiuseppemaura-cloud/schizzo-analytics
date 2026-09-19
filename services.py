@@ -59,8 +59,8 @@ def valuta_impatto_qualita_rosa(casa: str, ospite: str) -> tuple:
     
     return max(0.7, min(1.3, moltiplicatore_casa)), max(0.7, min(1.3, moltiplicatore_ospite)), score_casa, score_ospite
 
-def stima_lambda_squadre_avanzato(casa: str, ospite: str) -> tuple:
-    """Ricava i valori lambda integrando Poisson con xG, PPDA, fattore campo e qualità della rosa."""
+def calcola_lambda_avanzato(casa: str, ospite: str) -> tuple:
+    """Nome originale ripristinato per evitare l'ImportError: ricava i lambda integrando xG, PPDA, fattore campo e qualità della rosa."""
     casa_key = normalizza_nome_squadra(casa)
     ospite_key = normalizza_nome_squadra(ospite)
     
@@ -81,9 +81,12 @@ def stima_lambda_squadre_avanzato(casa: str, ospite: str) -> tuple:
     
     return max(0.2, l_casa), max(0.2, l_ospite)
 
+# Alias per retrocompatibilità interna se richiamato altrove
+stima_lambda_squadre_avanzato = calcola_lambda_avanzato
+
 def calcola_quote_mercati(casa: str, ospite: str) -> dict:
     """Calcola le probabilità e le quote stimate per 1X2, Over/Under e Goal/No Goal tramite Poisson avanzata."""
-    l_casa, l_ospite = stima_lambda_squadre_avanzato(casa, ospite)
+    l_casa, l_ospite = calcola_lambda_avanzato(casa, ospite)
     
     prob_casa = 0.0
     prob_pareggio = 0.0
