@@ -2,7 +2,9 @@
 import math
 import random
 import os
-import google.generativeai as genai
+import json
+import urllib.request
+import urllib.error
 from database import (
     TEAM_ALIASES, DB_EFFICIENZA_XG, DB_PPDA, DB_DUELLI, 
     DB_ACCURATEZZA_BALISTICA, DB_OVERRIDE_FATTORE_CAMPO,
@@ -272,27 +274,41 @@ def esegui_master_calculator(casa: str, ospite: str, contesto: dict):
     }
 
 def genera_parere_gemini(casa: str, ospite: str, *args, **kwargs) -> str:
-    """Interroga la vera API di Gemini per ottenere un parere di scommessa autonomo, diretto e indipendente."""
+    """Interroga direttamente l'API REST di Gemini via HTTP nativo (senza librerie esterne) per un parere autonomo."""
     c = casa.strip().title()
     o = ospite.strip().title()
     
     api_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
     if not api_key:
-        return f"Parere non disponibile: API Key di Gemini non configurata su Render per il match {c} - {o}."
+        return f"Parere non disponibile: API Key di Gemini non configurata su Render per {c} vs {o}."
         
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
+    
+    prompt_text = (
+        f"Agisci come un tipster professionista ed esperto di scommesse calcistiche. "
+        f"Esprimi un parere tecnico secco, diretto e personale (massimo 3-4 righe) su quale scommessa "
+        f"consiglieresti di effettuare per la partita {c} vs {o}, motivandola con una lettura tattica "
+        f"e di campo del tutto indipendente, senza menzionare formule matematiche o dati numerici interni."
+    )
+    
+    payload = {
+        "contents": [{
+            "parts": [{"text": prompt_text}]
+        }]
+    }
+    
+    req_data = json.dumps(payload).encode("utf-8")
+    req = urllib.request.Request(url, data=req_data, headers={"Content-Type": "application/json"}, method="POST")
+    
     try:
-        genai.configure(api_key=api_key)
-        model = genai.GenerativeModel('gemini-1.5-flash')
-        prompt = (
-            f"Agisci come un tipster professionista ed esperto di scommesse calcistiche. "
-            f"Esprimi un parere tecnico secco, diretto e personale (massimo 3-4 righe) su quale scommessa "
-            f"consiglieresti di effettuare per la partita {c} vs {o}, motivandola con una lettura tattica "
-            f"e di campo del tutto indipendente, senza menzionare formule matematiche o dati numerici interni."
-        )
-        response = model.generate_content(prompt)
-        if response and response.text:
-            return response.text.strip()
+        with urllib.request.urlopen(req, timeout=10) as response:
+            res_body = json.loads(response.read().decode("utf-8"))
+            candidates = res_body.get("candidates", [])
+            if candidates:
+                parts = candidates[0].get("content", {}).get("parts", [])
+                if parts:
+                    return parts[0].get("text", "").strip()
     except Exception as e:
-        return f"Impossibile elaborare il parere per {c} vs {o} tramite API di Gemini (Errore: {str(e)})."
+        return f"Impossibile contattare l'API di Gemini per {c} vs {o} (Errore: {str(e)})."
         
     return f"Nessun parere generato per {c} vs {o}."
