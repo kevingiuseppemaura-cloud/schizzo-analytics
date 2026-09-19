@@ -151,9 +151,10 @@ def genera_contesto_match(casa: str, ospite: str) -> dict:
 def genera_parere_gemini(casa: str, ospite: str, contesto: dict, mercati: dict) -> str:
     """Interroga l'API di Gemini per produrre un'analisi tecnica di sintesi."""
     if not GEMINI_API_KEY:
-        return "Parere di Gemini non disponibile (chiave API GEMINI_API_KEY non configurata)."
+        print("DEBUG GEMINI: Chiave API GEMINI_API_KEY non trovata nelle variabili d'ambiente.")
+        return "Parere di Gemini non disponibile (chiave API non configurata)."
     
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={GEMINI_API_KEY}"
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
     
     prompt = (
         f"Analizza la partita di calcio tra {casa} e {ospite}. "
@@ -165,14 +166,16 @@ def genera_parere_gemini(casa: str, ospite: str, contesto: dict, mercati: dict) 
     payload = {"contents": [{"parts": [{"text": prompt}]}]}
     
     try:
-        response = requests.post(url, json=payload, timeout=4)
+        response = requests.post(url, json=payload, timeout=15)
         if response.status_code == 200:
             data = response.json()
             return data["candidates"][0]["content"]["parts"][0]["text"].strip()
         else:
-            return "Parere di Gemini momentaneamente non disponibile."
-    except Exception:
-        return "Servizio Gemini non raggiungibile."
+            print(f"DEBUG GEMINI - Errore HTTP {response.status_code}: {response.text}")
+            return f"Parere di Gemini non disponibile (Errore HTTP {response.status_code})."
+    except Exception as e:
+        print(f"DEBUG GEMINI - Eccezione catturata: {str(e)}")
+        return f"Servizio Gemini non raggiungibile ({str(e)})."
 
 def esegui_master_calculator(casa: str, ospite: str, contesto: dict):
     """Elabora i fattori qualitativi umani e tattici del match."""
