@@ -149,12 +149,11 @@ def genera_contesto_match(casa: str, ospite: str) -> dict:
     }
 
 def genera_parere_gemini(casa: str, ospite: str, contesto: dict, mercati: dict) -> str:
-    """Interroga l'API di Gemini per produrre un'analisi tecnica di sintesi."""
+    """Interroga l'API di Gemini con modello gemini-3.6-flash e tentativi automatici di retry in caso di 503."""
     if not GEMINI_API_KEY:
         print("DEBUG GEMINI: Chiave API GEMINI_API_KEY non trovata nelle variabili d'ambiente.")
         return "Parere di Gemini non disponibile (chiave API non configurata)."
     
-    # Aggiornato al modello raccomandato gemini-3.6-flash con timeout a 15s
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key={GEMINI_API_KEY}"
     
     prompt = (
@@ -166,17 +165,27 @@ def genera_parere_gemini(casa: str, ospite: str, contesto: dict, mercati: dict) 
     
     payload = {"contents": [{"parts": [{"text": prompt}]}]}
     
-    try:
-        response = requests.post(url, json=payload, timeout=15)
-        if response.status_code == 200:
-            data = response.json()
-            return data["candidates"][0]["content"]["parts"][0]["text"].strip()
-        else:
-            print(f"DEBUG GEMINI - Errore HTTP {response.status_code}: {response.text}")
-            return f"Parere di Gemini non disponibile (Errore HTTP {response.status_code})."
-    except Exception as e:
-        print(f"DEBUG GEMINI - Eccezione catturata: {str(e)}")
-        return f"Servizio Gemini non raggiungibile ({str(e)})."
+    # Ciclo di retry (fino a 3 tentativi) per gestire i picchi di traffico di Google (503)
+    for tentativo in range(3):
+        try:
+            response = requests.post(url, json=payload, timeout=15)
+            if response.status_code == 200:
+                data = response.json()
+                return data["candidates"][0]["content"]["parts"][0]["text"].strip()
+            elif response.status_code == 503:
+                print(f"DEBUG GEMINI - Server sovraccarico (503), tentativo {tentativo + 1}/3 in corso...")
+                time.sleep(2)
+                continue
+            else:
+                print(f"DEBUG GEMINI - Errore HTTP {response.status_code}: {response.text}")
+                return f"Parere di Gemini non disponibile (Errore HTTP {response.status_code})."
+        except Exception as e:
+            print(f"DEBUG GEMINI - Eccezione al tentativo {tentativo + 1}: {str(e)}")
+            if tentativo == 2:
+                return f"Servizio Gemini non raggiungibile ({str(e)})."
+            time.sleep(2)
+            
+    return "Parere di Gemini non disponibile (servizio temporaneamente occupato)."
 
 def esegui_master_calculator(casa: str, ospite: str, contesto: dict):
     """Elabora i fattori qualitativi umani e tattici del match."""
