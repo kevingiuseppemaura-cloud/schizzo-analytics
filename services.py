@@ -60,7 +60,7 @@ def valuta_impatto_qualita_rosa(casa: str, ospite: str) -> tuple:
     return max(0.7, min(1.3, moltiplicatore_casa)), max(0.7, min(1.3, moltiplicatore_ospite)), score_casa, score_ospite
 
 def calcola_lambda_avanzato(casa: str, ospite: str) -> tuple:
-    """Nome originale ripristinato per evitare l'ImportError: ricava i lambda integrando xG, PPDA, fattore campo e qualità della rosa."""
+    """Ricava i lambda integrando xG, PPDA, fattore campo e qualità della rosa."""
     casa_key = normalizza_nome_squadra(casa)
     ospite_key = normalizza_nome_squadra(ospite)
     
@@ -81,7 +81,7 @@ def calcola_lambda_avanzato(casa: str, ospite: str) -> tuple:
     
     return max(0.2, l_casa), max(0.2, l_ospite)
 
-# Alias per retrocompatibilità interna se richiamato altrove
+# Alias per coprire qualsiasi nome di funzione richiamato da main.py
 stima_lambda_squadre_avanzato = calcola_lambda_avanzato
 
 def calcola_quote_mercati(casa: str, ospite: str) -> dict:
@@ -128,6 +128,11 @@ def calcola_quote_mercati(casa: str, ospite: str) -> dict:
         "quote_over_under": {"over_2_5": q_over, "under_2_5": q_under},
         "quote_goal_nogoal": {"goal": q_goal, "nogoal": q_nogoal}
     }
+
+# Definizione esplicita e alias per elabora_mercati_poisson richiesto da main.py
+def elabora_mercati_poisson(casa: str, ospite: str) -> dict:
+    """Wrapper ufficiale per soddisfare l'import in main.py."""
+    return calcola_quote_mercati(casa, ospite)
 
 def analizza_ppda_e_pressing(casa: str, ospite: str) -> dict:
     """Estrae i dati PPDA e analizza l'intensità del pressing dei due team."""
