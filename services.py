@@ -154,7 +154,8 @@ def genera_parere_gemini(casa: str, ospite: str, contesto: dict, mercati: dict) 
         print("DEBUG GEMINI: Chiave API GEMINI_API_KEY non trovata nelle variabili d'ambiente.")
         return "Parere di Gemini non disponibile (chiave API non configurata)."
     
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
+    # Utilizziamo gemini-2.5-flash con timeout esteso a 15s per evitare errori 404 e di timeout
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={GEMINI_API_KEY}"
     
     prompt = (
         f"Analizza la partita di calcio tra {casa} e {ospite}. "
