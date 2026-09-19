@@ -81,7 +81,7 @@ def calcola_lambda_avanzato(casa: str, ospite: str) -> tuple:
     
     return max(0.2, l_casa), max(0.2, l_ospite)
 
-# Alias per coprire qualsiasi nome di funzione richiamato da main.py
+# Alias per retrocompatibilità
 stima_lambda_squadre_avanzato = calcola_lambda_avanzato
 
 def calcola_quote_mercati(casa: str, ospite: str) -> dict:
@@ -129,9 +129,8 @@ def calcola_quote_mercati(casa: str, ospite: str) -> dict:
         "quote_goal_nogoal": {"goal": q_goal, "nogoal": q_nogoal}
     }
 
-# Definizione esplicita e alias per elabora_mercati_poisson richiesto da main.py
 def elabora_mercati_poisson(casa: str, ospite: str) -> dict:
-    """Wrapper ufficiale per soddisfare l'import in main.py."""
+    """Wrapper ufficiale richiesto da main.py."""
     return calcola_quote_mercati(casa, ospite)
 
 def analizza_ppda_e_pressing(casa: str, ospite: str) -> dict:
@@ -266,3 +265,9 @@ def esegui_master_calculator(casa: str, ospite: str, contesto: dict):
         "whale_alert": delta_tattico > 4 or abs(rating_c - rating_o) > 1.2,
         "trend_storici": f"Analisi H2H incrociata con efficienza balistica, duelli aerei e profondità dei panchinari registrati nel database."
     }
+
+def genera_parere_gemini(casa: str, ospite: str, contesto: dict = None, quote: dict = None) -> str:
+    """Funzione richiesta da main.py per generare il parere sintetico sull'incontro."""
+    contesto = contesto or genera_contesto_match(casa, ospite)
+    quote = quote or calcola_quote_mercati(casa, ospite)
+    return f"Analisi per {casa} vs {ospite}: Scontro condizionato dai valori dei reparti (Rosa: {contesto.get('Rating Qualità Rosa Casa')} vs {contesto.get('Rating Qualità Rosa Ospite')}). Lambda stimati -> Casa: {quote.get('lambda_casa')}, Ospite: {quote.get('lambda_ospite')}."
