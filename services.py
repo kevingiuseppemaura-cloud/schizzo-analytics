@@ -59,8 +59,8 @@ def valuta_impatto_qualita_rosa(casa: str, ospite: str) -> tuple:
     
     return max(0.7, min(1.3, moltiplicatore_casa)), max(0.7, min(1.3, moltiplicatore_ospite)), score_casa, score_ospite
 
-def calcola_lambda_avanzato(casa: str, ospite: str) -> tuple:
-    """Ricava i lambda integrando xG, PPDA, fattore campo e qualità della rosa."""
+def calcola_lambda_avanzato(casa: str, ospite: str, *args, **kwargs) -> tuple:
+    """Ricava i lambda integrando xG, PPDA, fattore campo e qualità della rosa, tollerando argomenti extra da main.py."""
     casa_key = normalizza_nome_squadra(casa)
     ospite_key = normalizza_nome_squadra(ospite)
     
