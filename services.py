@@ -165,7 +165,6 @@ def genera_parere_gemini(casa: str, ospite: str, contesto: dict, mercati: dict) 
     
     payload = {"contents": [{"parts": [{"text": prompt}]}]}
     
-    # Ciclo di retry (fino a 3 tentativi) per gestire i picchi di traffico di Google (503)
     for tentativo in range(3):
         try:
             response = requests.post(url, json=payload, timeout=15)
@@ -204,24 +203,18 @@ def get_context_multiplier(contesto: dict) -> float:
     """
     moltiplicatore = 1.0
     
-    # 1. Peso Stadio (Sintetico/Vero, Aperto/Chiuso)
     if contesto.get("stadio_tipo") == "sintetico" and contesto.get("squadra_abitudine") == "naturale":
         moltiplicatore *= 0.95
     if contesto.get("stadio_condizione") == "chiuso": 
         moltiplicatore *= 1.02
         
-    # 2. Peso Motivazione
     motivazione_map = {"alta": 1.1, "normale": 1.0, "scarsa": 0.9}
     moltiplicatore *= motivazione_map.get(contesto.get("motivazione", "normale"), 1.0)
-    
-    # 3. Peso Mister
     moltiplicatore *= contesto.get("peso_mister", 1.0)
     
-    # 4. Peso Infortuni / Squalifiche
     if contesto.get("giocatori_chiave_out", False):
         moltiplicatore *= 0.85
         
-    # 5. Peso Arbitro e Aggressività
     if contesto.get("arbitro_severo") and contesto.get("squadra_aggressiva"):
         moltiplicatore *= 0.92
         
@@ -266,9 +259,10 @@ def calcola_matrice_risultati(l_casa: float, l_ospite: float, max_gol: int = 5):
     return matrice
 
 def elabora_mercati_poisson(l_casa: float, l_ospite: float):
-    """Converte i lambda di Poisson nelle percentuali e quote dei principali mercati (1X2, Under/Over, Goal/NoGoal)."""
+    """Converte i lambda di Poisson nelle percentuali e quote dei principali mercati (1X2, Under/Over, Goal/NoGoal, Multigol, Risultati Esatti)."""
     matrice = calcola_matrice_risultati(l_casa, l_ospite)
     
+    # 1X2
     p_1 = sum(prob for score, prob in matrice.items() if int(score.split('-')[0]) > int(score.split('-')[1]))
     p_X = sum(prob for score, prob in matrice.items() if int(score.split('-')[0]) == int(score.split('-')[1]))
     p_2 = sum(prob for score, prob in matrice.items() if int(score.split('-')[0]) < int(score.split('-')[1]))
@@ -279,6 +273,7 @@ def elabora_mercati_poisson(l_casa: float, l_ospite: float):
         "2": {"probabilita": round(p_2 * 100, 2), "quota": round(1 / p_2, 2) if p_2 > 0 else 99.0}
     }
     
+    # Gol / NoGol
     p_gg = sum(prob for score, prob in matrice.items() if int(score.split('-')[0]) > 0 and int(score.split('-')[1]) > 0)
     p_ng = 1.0 - p_gg
     
@@ -287,18 +282,50 @@ def elabora_mercati_poisson(l_casa: float, l_ospite: float):
         "NoGol": {"probabilita": round(p_ng * 100, 2), "quota": round(1 / p_ng, 2) if p_ng > 0 else 99.0}
     }
     
+    # Under / Over (da 0.5 a 4.5, con particolare focus su 1.5 - 4.5)
     under_over = {}
     for soglia in [0.5, 1.5, 2.5, 3.5, 4.5]:
         u_p = sum(prob for score, prob in matrice.items() if (int(score.split('-')[0]) + int(score.split('-')[1])) < soglia)
-        under_over[f"Under {soglia}"] = round(u_p * 100, 2)
-        under_over[f"Over {soglia}"] = round((1.0 - u_p) * 100, 2)
+        o_p = 1.0 - u_p
+        under_over[f"Under {soglia}"] = {
+            "probabilita": round(u_p * 100, 2),
+            "quota": round(1 / u_p, 2) if u_p > 0 else 99.0
+        }
+        under_over[f"Over {soglia}"] = {
+            "probabilita": round(o_p * 100, 2),
+            "quota": round(1 / o_p, 2) if o_p > 0 else 99.0
+        }
         
+    # Multigol (1-2, 1-3, 1-4, 1-5)
+    multigol = {}
+    range_multigol = [
+        ("Multigol 1-2", 1, 2),
+        ("Multigol 1-3", 1, 3),
+        ("Multigol 1-4", 1, 4),
+        ("Multigol 1-5", 1, 5)
+    ]
+    for nome_mg, min_g, max_g in range_multigol:
+        p_mg = sum(prob for score, prob in matrice.items() if min_g <= (int(score.split('-')[0]) + int(score.split('-')[1])) <= max_g)
+        multigol[nome_mg] = {
+            "probabilita": round(p_mg * 100, 2),
+            "quota": round(1 / p_mg, 2) if p_mg > 0 else 99.0
+        }
+
+    # Top 3 Risultati Esatti più probabili
     top_esatti = sorted(matrice.items(), key=lambda x: x[1], reverse=True)[:3]
-    top_esatti_fmt = [{"risultato": k, "probabilita": round(v * 100, 2)} for k, v in top_esatti]
+    top_esatti_fmt = [
+        {
+            "risultato": k, 
+            "probabilita": round(v * 100, 2),
+            "quota": round(1 / v, 2) if v > 0 else 99.0
+        } 
+        for k, v in top_esatti
+    ]
 
     return {
         "esito_1x2": esito_1x2,
         "gol_no_gol": gol_no_gol,
         "under_over": under_over,
+        "multigol": multigol,
         "top_3_risultati_esatti": top_esatti_fmt
     }
