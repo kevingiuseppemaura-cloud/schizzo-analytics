@@ -1,0 +1,102 @@
+{
+    "Genoa": {
+        "gialli": 63,
+        "rossi": 3,
+        "falli": 470
+    },
+    "Lecce": {
+        "gialli": 69,
+        "rossi": 2,
+        "falli": 480
+    },
+    "Sassuolo": {
+        "gialli": 84,
+        "rossi": 4,
+        "falli": 455
+    },
+    "Napoli": {
+        "gialli": 49,
+        "rossi": 2,
+        "falli": 425
+    },
+    "Milan": {
+        "gialli": 64,
+        "rossi": 3,
+        "falli": 384
+    },
+    "Cremonese": {
+        "gialli": 73,
+        "rossi": 6,
+        "falli": 514
+    },
+    "Roma": {
+        "gialli": 68,
+        "rossi": 3,
+        "falli": 523
+    },
+    "Bologna": {
+        "gialli": 67,
+        "rossi": 6,
+        "falli": 500
+    },
+    "Cagliari": {
+        "gialli": 81,
+        "rossi": 2,
+        "falli": 524
+    },
+    "Fiorentina": {
+        "gialli": 82,
+        "rossi": 3,
+        "falli": 475
+    },
+    "Como": {
+        "gialli": 80,
+        "rossi": 3,
+        "falli": 509
+    },
+    "Lazio": {
+        "gialli": 78,
+        "rossi": 9,
+        "falli": 402
+    },
+    "Atalanta": {
+        "gialli": 60,
+        "rossi": 2,
+        "falli": 450
+    },
+    "Pisa": {
+        "gialli": 78,
+        "rossi": 5,
+        "falli": 501
+    },
+    "Juventus": {
+        "gialli": 52,
+        "rossi": 2,
+        "falli": 461
+    },
+    "Parma": {
+        "gialli": 64,
+        "rossi": 5,
+        "falli": 413
+    },
+    "Udinese": {
+        "gialli": 71,
+        "rossi": 3,
+        "falli": 520
+    },
+    "Verona": {
+        "gialli": 89,
+        "rossi": 5,
+        "falli": 598
+    },
+    "Inter": {
+        "gialli": 63,
+        "rossi": 0,
+        "falli": 499
+    },
+    "Torino": {
+        "gialli": 71,
+        "rossi": 1,
+        "falli": 530
+    }
+}
