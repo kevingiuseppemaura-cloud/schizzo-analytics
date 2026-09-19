@@ -59,7 +59,6 @@ class MatchAnalysisResponse {
     final contestoData = json['contesto'] ?? json['info_match'] ?? {};
     final analisiData = json['analisi_avanzata'] ?? json['master_calculator'] ?? {};
 
-    // Estrazione pulita della stringa tipster inviata direttamente dal backend
     String iaOpinion = json['consiglio_gemini'] ?? json['parere_ia'] ?? json['gemini_opinion'] ?? json['parere_gemini'] ?? json['consiglio_gioco'] ?? '';
 
     if (iaOpinion.isEmpty) {
@@ -84,12 +83,14 @@ class PoissonData {
   final Map<String, dynamic> esito1x2;
   final Map<String, dynamic> golNoGol;
   final Map<String, dynamic> underOver;
+  final Map<String, dynamic> multigol;
   final List<Map<String, dynamic>> topRisultatiEsatti;
 
   PoissonData({
     required this.esito1x2,
     required this.golNoGol,
     required this.underOver,
+    required this.multigol,
     required this.topRisultatiEsatti,
   });
 
@@ -99,6 +100,7 @@ class PoissonData {
       esito1x2: json['esito_1x2'] ?? {},
       golNoGol: json['gol_no_gol'] ?? {},
       underOver: json['under_over'] ?? {},
+      multigol: json['multigol'] ?? {},
       topRisultatiEsatti: rawTop.map((e) => Map<String, dynamic>.from(e)).toList(),
     );
   }
@@ -579,8 +581,72 @@ class _AnalisiMatchScreenState extends State<AnalisiMatchScreen> {
                           ),
                         ),
                         
+                        // 1. ESITO 1X2
+                        if (poissonResults.containsKey('esito_1x2')) ...[
+                          const SizedBox(height: 16),
+                          const Text(
+                            'Esito 1X2 (Poisson):',
+                            style: TextStyle(color: Color(0xFFFF6600), fontWeight: FontWeight.bold, fontSize: 13),
+                          ),
+                          const SizedBox(height: 8),
+                          Row(
+                            children: ((poissonResults['esito_1x2'] as Map<String, dynamic>? ?? {})).entries.map((e) {
+                              final data = e.value is Map ? e.value as Map<String, dynamic> : <String, dynamic>{'probabilita': e.value};
+                              final double prob = double.tryParse((data['probabilita'] ?? 0).toString()) ?? 0.0;
+                              final double quota = double.tryParse((data['quota'] ?? 0).toString()) ?? 0.0;
+                              
+                              final mapValues = (poissonResults['esito_1x2'] as Map<String, dynamic>).values
+                                  .map((v) {
+                                    final d = v is Map ? v : {'probabilita': v};
+                                    return double.tryParse((d['probabilita'] ?? 0).toString()) ?? 0.0;
+                                  })
+                                  .toList();
+                              final maxProb = mapValues.isNotEmpty ? mapValues.reduce((a, b) => a > b ? a : b) : 0.0;
+                              final bool isFavorite = prob == maxProb;
+
+                              return Expanded(
+                                child: Container(
+                                  margin: const EdgeInsets.symmetric(horizontal: 4),
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF161616),
+                                    borderRadius: BorderRadius.circular(10),
+                                    border: Border.all(
+                                      color: isFavorite ? const Color(0xFF0055FF) : Colors.white.withOpacity(0.05),
+                                      width: isFavorite ? 2.0 : 1.0,
+                                    ),
+                                  ),
+                                  child: Column(
+                                    children: [
+                                      Text(
+                                        e.key,
+                                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+                                      ),
+                                      const SizedBox(height: 6),
+                                      Text(
+                                        '$prob%',
+                                        style: TextStyle(
+                                          color: isFavorite ? const Color(0xFFFF6600) : Colors.white70,
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 14,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        'Quota $quota',
+                                        style: TextStyle(color: Colors.grey.shade400, fontSize: 11),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            }).toList(),
+                          ),
+                        ],
+
+                        // 2. GOL / NOGOL
                         if (poissonResults.containsKey('gol_no_gol')) ...[
-                          const SizedBox(height: 12),
+                          const SizedBox(height: 20),
                           const Text(
                             'Esito Gol / No Gol (Poisson):',
                             style: TextStyle(color: Color(0xFFFF6600), fontWeight: FontWeight.bold, fontSize: 13),
@@ -645,67 +711,133 @@ class _AnalisiMatchScreenState extends State<AnalisiMatchScreen> {
                             }).toList(),
                           ),
                         ],
-                        
-                        if (poissonResults.containsKey('esito_1x2')) ...[
+
+                        // 3. UNDER / OVER (da 1.5 a 4.5)
+                        if (poissonResults.containsKey('under_over')) ...[
                           const SizedBox(height: 20),
                           const Text(
-                            'Esito 1X2 (Poisson):',
+                            'Under / Over (da 1.5 a 4.5):',
                             style: TextStyle(color: Color(0xFFFF6600), fontWeight: FontWeight.bold, fontSize: 13),
                           ),
                           const SizedBox(height: 8),
-                          Row(
-                            children: ((poissonResults['esito_1x2'] as Map<String, dynamic>? ?? {})).entries.map((e) {
-                              final data = e.value is Map ? e.value as Map<String, dynamic> : <String, dynamic>{'probabilita': e.value};
-                              final double prob = double.tryParse((data['probabilita'] ?? 0).toString()) ?? 0.0;
-                              final double quota = double.tryParse((data['quota'] ?? 0).toString()) ?? 0.0;
-                              
-                              final mapValues = (poissonResults['esito_1x2'] as Map<String, dynamic>).values
-                                  .map((v) {
-                                    final d = v is Map ? v : {'probabilita': v};
-                                    return double.tryParse((d['probabilita'] ?? 0).toString()) ?? 0.0;
-                                  })
-                                  .toList();
-                              final maxProb = mapValues.isNotEmpty ? mapValues.reduce((a, b) => a > b ? a : b) : 0.0;
-                              final bool isFavorite = prob == maxProb;
-
-                              return Expanded(
-                                child: Container(
-                                  margin: const EdgeInsets.symmetric(horizontal: 4),
-                                  padding: const EdgeInsets.all(12),
+                          Builder(builder: (context) {
+                            final uoMap = poissonResults['under_over'] as Map<String, dynamic>? ?? {};
+                            final targetKeys = ['Under 1.5', 'Over 1.5', 'Under 2.5', 'Over 2.5', 'Under 3.5', 'Over 3.5', 'Under 4.5', 'Over 4.5'];
+                            return Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: targetKeys.where((k) => uoMap.containsKey(k)).map((k) {
+                                final val = uoMap[k];
+                                final prob = val is Map ? (double.tryParse((val['probabilita'] ?? 0).toString()) ?? 0.0) : 0.0;
+                                final quota = val is Map ? (double.tryParse((val['quota'] ?? 0).toString()) ?? 0.0) : 0.0;
+                                return Container(
+                                  width: (MediaQuery.of(context).size.width - 56) / 2,
+                                  padding: const EdgeInsets.all(10),
                                   decoration: BoxDecoration(
                                     color: const Color(0xFF161616),
-                                    borderRadius: BorderRadius.circular(10),
-                                    border: Border.all(
-                                      color: isFavorite ? const Color(0xFF0055FF) : Colors.white.withOpacity(0.05),
-                                      width: isFavorite ? 2.0 : 1.0,
-                                    ),
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(color: Colors.white.withOpacity(0.05)),
                                   ),
-                                  child: Column(
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                     children: [
-                                      Text(
-                                        e.key,
-                                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
-                                      ),
-                                      const SizedBox(height: 6),
-                                      Text(
-                                        '$prob%',
-                                        style: TextStyle(
-                                          color: isFavorite ? const Color(0xFFFF6600) : Colors.white70,
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 14,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 4),
-                                      Text(
-                                        'Quota $quota',
-                                        style: TextStyle(color: Colors.grey.shade400, fontSize: 11),
+                                      Text(k, style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w500)),
+                                      Column(
+                                        crossAxisAlignment: CrossAxisAlignment.end,
+                                        children: [
+                                          Text('$prob%', style: const TextStyle(color: Color(0xFFFF6600), fontWeight: FontWeight.bold, fontSize: 13)),
+                                          if (quota > 0) Text('Q. $quota', style: TextStyle(color: Colors.grey.shade400, fontSize: 10)),
+                                        ],
                                       ),
                                     ],
                                   ),
-                                ),
-                              );
-                            }).toList(),
+                                );
+                              }).toList(),
+                            );
+                          }),
+                        ],
+
+                        // 4. MULTIGOL (1-2, 1-3, 1-4, 1-5)
+                        if (poissonResults.containsKey('multigol')) ...[
+                          const SizedBox(height: 20),
+                          const Text(
+                            'Multigol:',
+                            style: TextStyle(color: Color(0xFFFF6600), fontWeight: FontWeight.bold, fontSize: 13),
                           ),
+                          const SizedBox(height: 8),
+                          Builder(builder: (context) {
+                            final mgMap = poissonResults['multigol'] as Map<String, dynamic>? ?? {};
+                            return Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: mgMap.entries.map((e) {
+                                final val = e.value;
+                                final prob = val is Map ? (double.tryParse((val['probabilita'] ?? 0).toString()) ?? 0.0) : 0.0;
+                                final quota = val is Map ? (double.tryParse((val['quota'] ?? 0).toString()) ?? 0.0) : 0.0;
+                                return Container(
+                                  width: (MediaQuery.of(context).size.width - 56) / 2,
+                                  padding: const EdgeInsets.all(10),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF161616),
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(color: Colors.white.withOpacity(0.05)),
+                                  ),
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Text(e.key, style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w500)),
+                                      Column(
+                                        crossAxisAlignment: CrossAxisAlignment.end,
+                                        children: [
+                                          Text('$prob%', style: const TextStyle(color: Color(0xFFFF6600), fontWeight: FontWeight.bold, fontSize: 13)),
+                                          if (quota > 0) Text('Q. $quota', style: TextStyle(color: Colors.grey.shade400, fontSize: 10)),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              }).toList(),
+                            );
+                          }),
+                        ],
+
+                        // 5. TOP 3 RISULTATI ESATTI
+                        if (poissonResults.containsKey('top_3_risultati_esatti') || poissonResults.containsKey('topRisultatiEsatti')) ...[
+                          const SizedBox(height: 20),
+                          const Text(
+                            'Top 3 Risultati Esatti:',
+                            style: TextStyle(color: Color(0xFFFF6600), fontWeight: FontWeight.bold, fontSize: 13),
+                          ),
+                          const SizedBox(height: 8),
+                          Builder(builder: (context) {
+                            final List<dynamic> topList = poissonResults['top_3_risultati_esatti'] ?? poissonResults['topRisultatiEsatti'] ?? [];
+                            return Row(
+                              children: topList.map((item) {
+                                final score = item['risultato'] ?? item['score'] ?? 'N/D';
+                                final prob = double.tryParse((item['probabilita'] ?? item['probability'] ?? 0).toString()) ?? 0.0;
+                                final quota = double.tryParse((item['quota'] ?? 0).toString()) ?? 0.0;
+                                return Expanded(
+                                  child: Container(
+                                    margin: const EdgeInsets.symmetric(horizontal: 4),
+                                    padding: const EdgeInsets.all(10),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF161616),
+                                      borderRadius: BorderRadius.circular(8),
+                                      border: Border.all(color: Colors.white.withOpacity(0.05)),
+                                    ),
+                                    child: Column(
+                                      children: [
+                                        Text(score, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
+                                        const SizedBox(height: 4),
+                                        Text('$prob%', style: const TextStyle(color: Color(0xFFFF6600), fontWeight: FontWeight.bold, fontSize: 13)),
+                                        if (quota > 0) Text('Q. $quota', style: TextStyle(color: Colors.grey.shade400, fontSize: 10)),
+                                      ],
+                                    ),
+                                  ),
+                                );
+                              }).toList(),
+                            );
+                          }),
                         ],
                       ],
                     ),
