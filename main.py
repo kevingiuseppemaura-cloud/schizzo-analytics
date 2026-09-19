@@ -47,7 +47,11 @@ def calcola_match(req: MatchRequest):
     contesto_match = genera_contesto_match(casa=casa, ospite=ospite)
     master_stats = esegui_master_calculator(casa, ospite, contesto_match)
 
-    parere_gemini = genera_parere_gemini(casa, ospite, contesto_match, mercati)
+    try:
+        parere_gemini = genera_parere_gemini(casa, ospite, contesto_match, mercati)
+    except Exception as e:
+        print(f"DEBUG - Errore critico in genera_parere_gemini: {str(e)}")
+        parere_gemini = f"Errore tecnico Gemini: {str(e)}"
 
     intelligence = {
         'mister': f"Casa: {contesto_match.get('Allenatore Casa')} (Tattica {contesto_match.get('Indice Tattico Casa')}) | Ospite: {contesto_match.get('Allenatore Ospite')} (Tattica {contesto_match.get('Indice Tattico Ospite')})",
