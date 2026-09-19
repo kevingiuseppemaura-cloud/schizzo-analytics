@@ -34,6 +34,40 @@ OPENWEATHER_API_KEY = os.environ.get("OPENWEATHER_API_KEY", "1276c6c958e9fa1f6d9
 FOOTBALL_DATA_API_KEY = os.environ.get("FOOTBALL_DATA_API_KEY")
 FOOTBALL_DATA_BASE_URL = "https://api.football-data.org/v4/"
 
+# ==========================================
+# 🤖 CONFIGURAZIONE GEMINI API
+# ==========================================
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
+
+def genera_parere_gemini(casa: str, ospite: str, contesto: dict, mercati: dict) -> str:
+    if not GEMINI_API_KEY:
+        return "Parere di Gemini non disponibile (chiave API GEMINI_API_KEY non configurata)."
+    
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={GEMINI_API_KEY}"
+    
+    prompt = (
+        f"Analizza la partita di calcio tra {casa} e {ospite}. "
+        f"Contesto del match: {contesto}. "
+        f"Mercati e quote Poisson: {mercati}. "
+        f"Fornisci un breve parere tecnico professionale da esperto di scommesse sportive e tattica (massimo 3-4 righe, in italiano)."
+    )
+    
+    payload = {
+        "contents": [{
+            "parts": [{"text": prompt}]
+        }]
+    }
+    
+    try:
+        response = requests.post(url, json=payload, timeout=4)
+        if response.status_code == 200:
+            data = response.json()
+            return data["candidates"][0]["content"]["parts"][0]["text"].strip()
+        else:
+            return "Parere di Gemini momentaneamente non disponibile."
+    except Exception:
+        return "Servizio Gemini non raggiungibile."
+
 def ottieni_meteo_live(lat: float, lon: float) -> str:
     if not lat or not lon:
         return "Non disponibile"
@@ -782,6 +816,9 @@ def calcola_match(req: MatchRequest):
     contesto_match = genera_contesto_match(casa=casa, ospite=ospite)
     master_stats = esegui_master_calculator(casa, ospite, contesto_match)
 
+    # Generazione parere Gemini integrato
+    parere_gemini = genera_parere_gemini(casa, ospite, contesto_match, mercati)
+
     intelligence = {
         'mister': f"Casa: {contesto_match.get('Allenatore Casa')} (Tattica {contesto_match.get('Indice Tattico Casa')}) | Ospite: {contesto_match.get('Allenatore Ospite')} (Tattica {contesto_match.get('Indice Tattico Ospite')})",
         'arbitro': f"{contesto_match.get('Arbitro Designato')} (Severità: {contesto_match.get('Severità Arbitro')})",
@@ -804,5 +841,6 @@ def calcola_match(req: MatchRequest):
         "analisi_avanzata": master_stats,
         "master_calculator": master_stats,
         "intelligence": intelligence,
+        "parere_gemini": parere_gemini,
         "panel_esperti": f"Analisi tattica: {master_stats['fattori_umani']}. Flussi: {master_stats['flussi_monetari']}."
     }
