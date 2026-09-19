@@ -1,3 +1,4 @@
+# scraper.py
 import requests
 from bs4 import BeautifulSoup
 
@@ -56,3 +57,14 @@ def process_arbitro_per_calcolo(url_match, database_arbitri):
         "arbitro": nome_arbitro,
         "moltiplicatore_arbitro": indice_severita
     }
+
+def get_quote_flashscore(match_id: str) -> dict:
+    """
+    Funzione di raccordo per il recupero delle quote live da Flashscore.
+    Restituisce un dizionario vuoto come fallback sicuro per evitare errori di importazione.
+    """
+    try:
+        # Qui potrai implementare la logica di scraping delle quote se desiderato
+        return {}
+    except Exception:
+        return {}
